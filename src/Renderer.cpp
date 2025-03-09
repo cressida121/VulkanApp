@@ -1,0 +1,205 @@
+#include "Renderer.h"
+#include "Application.h"
+
+#include <stdexcept>
+#include <fstream>
+
+
+VulkanApp::Renderer::Renderer(Application* parent) : m_parent(parent){
+
+	// Initialize shaders
+
+	m_vertexShaderModule = LoadCompiledShader("C:\\Users\\patry\\source\\repos\\VulkanApp\\shaders\\compiled\\VertexShader.spv");
+	m_fragmentShaderModule = LoadCompiledShader("C:\\Users\\patry\\source\\repos\\VulkanApp\\shaders\\compiled\\FragmentShader.spv");
+
+	VkPipelineShaderStageCreateInfo vertexShaderCI = {};
+	vertexShaderCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertexShaderCI.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vertexShaderCI.module = m_vertexShaderModule;
+	vertexShaderCI.pName = "main";
+
+	VkPipelineShaderStageCreateInfo fragmentShaderCI = {};
+	fragmentShaderCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragmentShaderCI.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragmentShaderCI.module = m_fragmentShaderModule;
+	fragmentShaderCI.pName = "main";
+
+	VkPipelineShaderStageCreateInfo shaderStages[] = { vertexShaderCI, fragmentShaderCI };
+
+	// Create render pass
+
+	VkAttachmentDescription attachmentDesc = {};
+	attachmentDesc.format = m_parent->m_vkSurfaceFormat.format;
+	attachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
+	attachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	attachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	attachmentDesc.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	attachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	attachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	attachmentDesc.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	VkAttachmentReference colorAttachmentRef = {};
+	colorAttachmentRef.attachment = 0;
+	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpassDesc = {};
+	subpassDesc.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpassDesc.colorAttachmentCount = 1;
+	subpassDesc.pColorAttachments = &colorAttachmentRef;
+
+	VkRenderPassCreateInfo renderPassCI = {};
+	renderPassCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassCI.attachmentCount = 1;
+	renderPassCI.pAttachments = &attachmentDesc;
+	renderPassCI.subpassCount = 1;
+	renderPassCI.pSubpasses = &subpassDesc;
+
+	if (vkCreateRenderPass(m_parent->m_vkLogicalDevice, &renderPassCI, nullptr, &m_vkRenderPass) != VK_SUCCESS) {
+		throw std::runtime_error("[Runtime error] Failed to create render pass");
+	}
+
+	// Create the pipeline
+		// Vertex input
+
+	VkPipelineVertexInputStateCreateInfo vertexInputStateCI = {};
+	vertexInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputStateCI.vertexBindingDescriptionCount = 0;
+	vertexInputStateCI.pVertexBindingDescriptions = nullptr;
+	vertexInputStateCI.vertexAttributeDescriptionCount = 0;
+	vertexInputStateCI.pVertexAttributeDescriptions = nullptr;
+
+		// Input assembly
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyCI = {};
+	inputAssemblyCI.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssemblyCI.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssemblyCI.primitiveRestartEnable = VK_FALSE;
+
+		// Viewport and scissor
+	VkViewport viewport = {};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = static_cast<float>(m_parent->m_swapchainExtent.width);
+	viewport.height = static_cast<float>(m_parent->m_swapchainExtent.height);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+
+	VkRect2D scissor = {};
+	scissor.offset = { 0,0 };
+	scissor.extent = m_parent->m_swapchainExtent;
+
+	VkPipelineViewportStateCreateInfo viewportStateCI = {};
+	viewportStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportStateCI.viewportCount = 1;
+	viewportStateCI.pViewports = &viewport;
+	viewportStateCI.scissorCount = 1;
+	viewportStateCI.pScissors = &scissor;
+
+		// Rasterizer
+	VkPipelineRasterizationStateCreateInfo rasterizerStateCI = {};
+	rasterizerStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizerStateCI.depthClampEnable = VK_FALSE;
+	rasterizerStateCI.rasterizerDiscardEnable = VK_FALSE;
+	rasterizerStateCI.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterizerStateCI.lineWidth = 1.0f;
+	rasterizerStateCI.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizerStateCI.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterizerStateCI.depthBiasEnable = VK_FALSE;
+	rasterizerStateCI.depthBiasConstantFactor = 0.0f;
+	rasterizerStateCI.depthBiasClamp = 0.0f;
+	rasterizerStateCI.depthBiasSlopeFactor = 0.0f;
+
+	VkPipelineMultisampleStateCreateInfo multisamplingStateCI = {};
+	multisamplingStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisamplingStateCI.sampleShadingEnable = VK_FALSE;
+	multisamplingStateCI.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisamplingStateCI.minSampleShading = 1.0f;
+	multisamplingStateCI.pSampleMask = nullptr;
+	multisamplingStateCI.alphaToCoverageEnable = VK_FALSE;
+	multisamplingStateCI.alphaToOneEnable = VK_FALSE;
+
+		// Color blending
+	VkPipelineColorBlendAttachmentState colorBlendAttachmentCI = {};
+	colorBlendAttachmentCI.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | 
+		VK_COLOR_COMPONENT_G_BIT | 
+		VK_COLOR_COMPONENT_B_BIT |
+		VK_COLOR_COMPONENT_A_BIT;
+	colorBlendAttachmentCI.blendEnable = VK_FALSE;
+	colorBlendAttachmentCI.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendAttachmentCI.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendAttachmentCI.colorBlendOp = VK_BLEND_OP_ADD;
+	colorBlendAttachmentCI.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendAttachmentCI.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendAttachmentCI.alphaBlendOp = VK_BLEND_OP_ADD;
+
+	VkPipelineColorBlendStateCreateInfo colorBlendingCI = {};
+	colorBlendingCI.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlendingCI.logicOpEnable = VK_FALSE;
+	colorBlendingCI.attachmentCount = 1;
+	colorBlendingCI.pAttachments = &colorBlendAttachmentCI;
+
+		// Pipeline layout
+	VkPipelineLayoutCreateInfo pipelineLayoutCI = {};
+	pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	
+	if (vkCreatePipelineLayout(m_parent->m_vkLogicalDevice, &pipelineLayoutCI, nullptr, &m_vkPipelineLayout) != VK_SUCCESS) {
+		throw std::runtime_error("[Runtime error] Failed to create pipeline layout");
+	}
+
+	VkGraphicsPipelineCreateInfo pipelineCI = {};
+	pipelineCI.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineCI.stageCount = 2;
+	pipelineCI.pStages = shaderStages;
+	pipelineCI.pVertexInputState = &vertexInputStateCI;
+	pipelineCI.pInputAssemblyState = &inputAssemblyCI;
+	pipelineCI.pViewportState = &viewportStateCI;
+	pipelineCI.pRasterizationState = &rasterizerStateCI;
+	pipelineCI.pMultisampleState = &multisamplingStateCI;
+	pipelineCI.pDepthStencilState = nullptr;
+	pipelineCI.pColorBlendState = &colorBlendingCI;
+	pipelineCI.layout = m_vkPipelineLayout;
+	pipelineCI.renderPass = m_vkRenderPass;
+	pipelineCI.subpass = 0;
+	pipelineCI.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineCI.basePipelineIndex = -1;
+
+	if (vkCreateGraphicsPipelines(m_parent->m_vkLogicalDevice, VK_NULL_HANDLE, 1, &pipelineCI, nullptr, &m_vkPipeline) != VK_SUCCESS) {
+		throw std::runtime_error("[Runtime error] Failed to create pipeline");
+	}
+
+	m_parent->m_renderers.push_back(this);
+}
+
+VulkanApp::Renderer::~Renderer() {
+	vkDestroyPipeline(m_parent->m_vkLogicalDevice, m_vkPipeline, nullptr);
+	vkDestroyPipelineLayout(m_parent->m_vkLogicalDevice, m_vkPipelineLayout, nullptr);
+	vkDestroyRenderPass(m_parent->m_vkLogicalDevice, m_vkRenderPass, nullptr);
+	vkDestroyShaderModule(m_parent->m_vkLogicalDevice, m_vertexShaderModule, nullptr);
+	vkDestroyShaderModule(m_parent->m_vkLogicalDevice, m_fragmentShaderModule, nullptr);
+}
+
+VkShaderModule VulkanApp::Renderer::LoadCompiledShader(const std::string& filePath) {
+	std::ifstream file(filePath, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open()) {
+		throw std::runtime_error("[Runtime error] Failed to open compiled shader file");
+	}
+
+	size_t fileSize = static_cast<size_t>(file.tellg());
+	std::vector<char> buffer(fileSize);
+
+	file.seekg(0);
+	file.read(buffer.data(), fileSize);
+	file.close();
+
+	VkShaderModuleCreateInfo shaderModuleCI = {};
+	shaderModuleCI.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shaderModuleCI.codeSize = buffer.size();
+	shaderModuleCI.pCode = reinterpret_cast<const uint32_t*>(buffer.data());
+
+	VkShaderModule shaderModule = VK_NULL_HANDLE;
+	if (vkCreateShaderModule(m_parent->m_vkLogicalDevice, &shaderModuleCI, nullptr, &shaderModule) != VK_SUCCESS) {
+		throw std::runtime_error("[Runtime error] Failed to create shader module");
+	}
+
+	return shaderModule;
+}

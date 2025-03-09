@@ -2,3 +2,4 @@
 vkspec.pdf
 /VulkanApp/x64
 /.vs
+/shaders/compiled

@@ -6,9 +6,11 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan\vulkan.h>
 
-namespace VulkanApp {
 
+namespace VulkanApp {
+	class Renderer;
 	class Application {
+		friend class Renderer;
 	public:
 		Application(const uint32_t windowWidth, const uint32_t windowHeight);
 		~Application();
@@ -39,5 +41,6 @@ namespace VulkanApp {
 		VkSurfaceFormatKHR m_vkSurfaceFormat;
 		VkExtent2D m_swapchainExtent;
 
+		std::vector<Renderer*> m_renderers;
 	};
 }

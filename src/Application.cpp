@@ -1,4 +1,6 @@
 #include <Application.h>
+#include <Renderer.h>
+
 #include <Windows.h>
 #include <iostream>
 #include <assert.h>
@@ -6,8 +8,6 @@
 #include <optional>
 #include <algorithm>
 
-#define VK_USE_PLATFORM_WIN32_KHR
-#include <vulkan\vulkan.h>
 
 // Vulkan information retrieval functions
 
@@ -312,9 +312,15 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 
 	// Create the views to the swapchain images
 	m_scImageViews = CreateImageViews(m_vkLogicalDevice, m_swapchainImages, m_vkSurfaceFormat.format);
+
+	new Renderer(this);
 }
 
 VulkanApp::Application::~Application() {
+	for (auto& renderer : m_renderers) {
+		delete renderer;
+	}
+
 	// Cleanup created Vulkan resources
 	vkDestroyDevice(m_vkLogicalDevice, nullptr);
 	vkDestroySurfaceKHR(m_vkInstance, m_vkSurface, nullptr);
