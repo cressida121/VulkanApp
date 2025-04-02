@@ -40,6 +40,8 @@ namespace VulkanApp {
 		std::vector<VkImageView> m_scImageViews;
 		VkSurfaceFormatKHR m_vkSurfaceFormat;
 		VkExtent2D m_swapchainExtent;
+		VkCommandPool m_gfxCommandPool;
+		VkCommandBuffer m_gfxCommandBuffer; // Destroyed along with VkCommandPool
 
 		std::vector<Renderer*> m_renderers;
 	};

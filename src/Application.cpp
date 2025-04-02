@@ -314,9 +314,66 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	m_scImageViews = CreateImageViews(m_vkLogicalDevice, m_swapchainImages, m_vkSurfaceFormat.format);
 
 	new Renderer(this);
+
+
+	// Create command pool
+	std::optional<uint32_t> qfIndex = getQueueFamilies(m_vkPhysicalDevice, VK_QUEUE_GRAPHICS_BIT);
+	
+	VkCommandPoolCreateInfo commandPoolCI = {};
+	commandPoolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	commandPoolCI.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	commandPoolCI.queueFamilyIndex = qfIndex.value();
+
+	if (vkCreateCommandPool(m_vkLogicalDevice, &commandPoolCI, nullptr, &m_gfxCommandPool) != VK_SUCCESS) {
+		throw std::runtime_error("[Runtime error] Cannot create a command pool");
+	}
+
+	// Create command buffer
+	VkCommandBufferAllocateInfo commandBufferCI = {};
+	commandBufferCI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	commandBufferCI.commandPool = m_gfxCommandPool;
+	commandBufferCI.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	commandBufferCI.commandBufferCount = 1;
+
+	if (vkAllocateCommandBuffers(m_vkLogicalDevice, &commandBufferCI, &m_gfxCommandBuffer) != VK_SUCCESS) {
+		throw std::runtime_error("[Runtime error] Failed to create a command pool");
+	}
+
+	VkCommandBufferBeginInfo beginInfoCI = {};
+	beginInfoCI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfoCI.flags = 0;
+	beginInfoCI.pInheritanceInfo = nullptr;
+
+	if (vkBeginCommandBuffer(m_gfxCommandBuffer, &beginInfoCI) != VK_SUCCESS) {
+		throw std::runtime_error("[Runtime error] Failed to begin a command buffer");
+	}
+
+
+	VkRenderPassBeginInfo renderPassCI = {};
+	renderPassCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassCI.renderPass = m_renderers.at(0)->GetRenderPass();
+	renderPassCI.framebuffer = m_renderers.at(0)->GetFramebuffer(0);
+	renderPassCI.renderArea.offset = { 0, 0 };
+	renderPassCI.renderArea.extent = m_swapchainExtent;
+
+	VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+	renderPassCI.clearValueCount = 1;
+	renderPassCI.pClearValues = &clearColor;
+
+	vkCmdBeginRenderPass(m_gfxCommandBuffer, &renderPassCI, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBindPipeline(m_gfxCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_renderers.at(0)->GetPipeline());
+	vkCmdDraw(m_gfxCommandBuffer, 3, 1, 0, 0);
+	vkCmdEndRenderPass(m_gfxCommandBuffer);
+
+	if (vkEndCommandBuffer(m_gfxCommandBuffer) != VK_SUCCESS) {
+		throw std::runtime_error("[Runtime error] Failed to end a command buffer");
+	}
 }
 
 VulkanApp::Application::~Application() {
+	
+	vkDestroyCommandPool(m_vkLogicalDevice, m_gfxCommandPool, nullptr);
+
 	for (auto& renderer : m_renderers) {
 		delete renderer;
 	}

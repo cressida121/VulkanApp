@@ -166,6 +166,28 @@ VulkanApp::Renderer::Renderer(Application* parent) : m_parent(parent){
 		throw std::runtime_error("[Runtime error] Failed to create pipeline");
 	}
 
+	// Create framebuffers
+
+	m_vkFramebuffers.resize(m_parent->m_scImageViews.size());
+	uint32_t i = 0;
+
+	for (auto scImageView : m_parent->m_scImageViews) {
+
+		VkFramebufferCreateInfo framebufferCI = {};
+		framebufferCI.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferCI.attachmentCount = 1;
+		framebufferCI.pAttachments = &scImageView;
+		framebufferCI.renderPass = m_vkRenderPass;
+		framebufferCI.width = m_parent->m_swapchainExtent.width;
+		framebufferCI.height = m_parent->m_swapchainExtent.height;
+		framebufferCI.layers = 1;
+
+		if (vkCreateFramebuffer(m_parent->m_vkLogicalDevice, &framebufferCI, nullptr, &m_vkFramebuffers[i++]) != VK_SUCCESS) {
+			throw std::runtime_error("[Runtime error] Failed to create framebuffer");
+		}
+
+	}
+
 	m_parent->m_renderers.push_back(this);
 }
 
@@ -175,6 +197,21 @@ VulkanApp::Renderer::~Renderer() {
 	vkDestroyRenderPass(m_parent->m_vkLogicalDevice, m_vkRenderPass, nullptr);
 	vkDestroyShaderModule(m_parent->m_vkLogicalDevice, m_vertexShaderModule, nullptr);
 	vkDestroyShaderModule(m_parent->m_vkLogicalDevice, m_fragmentShaderModule, nullptr);
+}
+
+VkRenderPass VulkanApp::Renderer::GetRenderPass() const {
+	return m_vkRenderPass;
+}
+
+VkFramebuffer VulkanApp::Renderer::GetFramebuffer(uint32_t index) const {
+	if (index >= 0 && index < m_vkFramebuffers.size())
+		return m_vkFramebuffers[index];
+	
+	return VK_NULL_HANDLE;
+}
+
+VkPipeline VulkanApp::Renderer::GetPipeline() const {
+	return m_vkPipeline;
 }
 
 VkShaderModule VulkanApp::Renderer::LoadCompiledShader(const std::string& filePath) {
