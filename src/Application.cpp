@@ -198,6 +198,36 @@ std::vector<std::string> getSupportedExtensions(const VkPhysicalDevice &physical
 	return extensionList;
 }
 
+static LRESULT MyWindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
+
+	switch (Msg)
+	{
+	case WM_CREATE:
+		// Initialize the window. 
+		return 0;
+
+	case WM_PAINT:
+		// Paint the window's client area. 
+		return 0;
+
+	case WM_SIZE:
+		// Set the size and position of the window. 
+		return 0;
+
+	case WM_DESTROY:
+		PostQuitMessage(0);
+		return 0;
+
+		// 
+		// Process other messages. 
+		// 
+
+	default:
+		return DefWindowProc(hWnd, Msg, wParam, lParam);
+	}
+	return 0;
+
+}
 
 HWND CreateSystemWindow(const std::wstring &name, const uint32_t windowWidth, const uint32_t windowHeight) {
 	
@@ -206,7 +236,7 @@ HWND CreateSystemWindow(const std::wstring &name, const uint32_t windowWidth, co
 	const wchar_t windowClassName[] = L"DefaultWindowClass";
 	
 	wndClassExW.lpszClassName = windowClassName;
-	wndClassExW.lpfnWndProc = DefWindowProcW;
+	wndClassExW.lpfnWndProc = MyWindowProc;
 	wndClassExW.hInstance = hInstance;
 	wndClassExW.hCursor = NULL;
 	wndClassExW.hIcon = NULL;
@@ -339,53 +369,46 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 		throw std::runtime_error("[Runtime error] Failed to create a command pool");
 	}
 
-	VkCommandBufferBeginInfo beginInfoCI = {};
-	beginInfoCI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfoCI.flags = 0;
-	beginInfoCI.pInheritanceInfo = nullptr;
+	// Create synchronization objects
 
-	if (vkBeginCommandBuffer(m_gfxCommandBuffer, &beginInfoCI) != VK_SUCCESS) {
-		throw std::runtime_error("[Runtime error] Failed to begin a command buffer");
-	}
+	VkSemaphoreCreateInfo semaphoreCI = {};
+	semaphoreCI.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
+	VkFenceCreateInfo fenceCI = {};
+	fenceCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-	VkRenderPassBeginInfo renderPassCI = {};
-	renderPassCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassCI.renderPass = m_renderers.at(0)->GetRenderPass();
-	renderPassCI.framebuffer = m_renderers.at(0)->GetFramebuffer(0);
-	renderPassCI.renderArea.offset = { 0, 0 };
-	renderPassCI.renderArea.extent = m_swapchainExtent;
-
-	VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
-	renderPassCI.clearValueCount = 1;
-	renderPassCI.pClearValues = &clearColor;
-
-	vkCmdBeginRenderPass(m_gfxCommandBuffer, &renderPassCI, VK_SUBPASS_CONTENTS_INLINE);
-	vkCmdBindPipeline(m_gfxCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_renderers.at(0)->GetPipeline());
-	vkCmdDraw(m_gfxCommandBuffer, 3, 1, 0, 0);
-	vkCmdEndRenderPass(m_gfxCommandBuffer);
-
-	if (vkEndCommandBuffer(m_gfxCommandBuffer) != VK_SUCCESS) {
-		throw std::runtime_error("[Runtime error] Failed to end a command buffer");
+	if (vkCreateSemaphore(m_vkLogicalDevice, &semaphoreCI, nullptr, &m_imageAvailableSem) != VK_SUCCESS ||
+		vkCreateSemaphore(m_vkLogicalDevice, &semaphoreCI, nullptr, &m_renderFinishedSem) != VK_SUCCESS ||
+		vkCreateFence(m_vkLogicalDevice, &fenceCI, nullptr, &m_inFlightFence) != VK_SUCCESS) {
+		throw std::runtime_error("[Runtime error] failed to create semaphores");
 	}
 }
 
 VulkanApp::Application::~Application() {
 	
+	vkDestroySemaphore(m_vkLogicalDevice, m_imageAvailableSem, nullptr);
+	vkDestroySemaphore(m_vkLogicalDevice, m_renderFinishedSem, nullptr);
+	vkDestroyFence(m_vkLogicalDevice, m_inFlightFence, nullptr);
+
 	vkDestroyCommandPool(m_vkLogicalDevice, m_gfxCommandPool, nullptr);
 
 	for (auto& renderer : m_renderers) {
 		delete renderer;
 	}
 
+	for (auto& imageView : m_scImageViews) {
+		vkDestroyImageView(m_vkLogicalDevice, imageView, nullptr);
+	}
+
+
+	vkDestroySwapchainKHR(m_vkLogicalDevice, m_vkSwapchain, nullptr);
+
 	// Cleanup created Vulkan resources
 	vkDestroyDevice(m_vkLogicalDevice, nullptr);
 	vkDestroySurfaceKHR(m_vkInstance, m_vkSurface, nullptr);
 	vkDestroyInstance(m_vkInstance, nullptr);
-	
-	for (auto& imageView : m_scImageViews) {
-		vkDestroyImageView(m_vkLogicalDevice, imageView, nullptr);
-	}
+
 }
 
 VkInstance VulkanApp::Application::CreateVkInstance(
@@ -609,6 +632,43 @@ std::vector<VkImageView> VulkanApp::Application::CreateImageViews(VkDevice logic
 	return imageViews;
 }
 
+bool VulkanApp::Application::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, uint32_t rendererIndex) {
+	
+	if (rendererIndex < 0 || rendererIndex >= m_renderers.size())
+		return false;
+
+	VkCommandBufferBeginInfo beginInfoCI = {};
+	beginInfoCI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfoCI.flags = 0;
+	beginInfoCI.pInheritanceInfo = nullptr;
+
+	if (vkBeginCommandBuffer(commandBuffer, &beginInfoCI) != VK_SUCCESS) {
+		throw std::runtime_error("[Runtime error] Failed to begin a command buffer");
+	}
+
+	VkRenderPassBeginInfo renderPassCI = {};
+	renderPassCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassCI.renderPass = m_renderers.at(rendererIndex)->GetRenderPass();
+	renderPassCI.framebuffer = m_renderers.at(rendererIndex)->GetFramebuffer(imageIndex);
+	renderPassCI.renderArea.offset = { 0, 0 };
+	renderPassCI.renderArea.extent = m_swapchainExtent;
+
+	VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
+	renderPassCI.clearValueCount = 1;
+	renderPassCI.pClearValues = &clearColor;
+
+	vkCmdBeginRenderPass(commandBuffer, &renderPassCI, VK_SUBPASS_CONTENTS_INLINE);
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_renderers.at(rendererIndex)->GetPipeline());
+	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+	vkCmdEndRenderPass(commandBuffer);
+
+	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
+		throw std::runtime_error("[Runtime error] Failed to end a command buffer");
+	}
+
+	return true;
+}
+
 
 void VulkanApp::Application::Run() {
 
@@ -621,6 +681,56 @@ void VulkanApp::Application::Run() {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
+		RenderFrame();
 	}
+
+	vkDeviceWaitIdle(m_vkLogicalDevice);
+}
+
+void VulkanApp::Application::RenderFrame() {
+	
+	vkWaitForFences(m_vkLogicalDevice, 1u, &m_inFlightFence, VK_TRUE, UINT64_MAX);
+	vkResetFences(m_vkLogicalDevice, 1u, &m_inFlightFence);
+
+	uint32_t imgIndex = 0u;
+	vkAcquireNextImageKHR(m_vkLogicalDevice, m_vkSwapchain, UINT64_MAX, m_imageAvailableSem, NULL, &imgIndex);
+
+	vkResetCommandBuffer(m_gfxCommandBuffer, 0);
+	RecordCommandBuffer(m_gfxCommandBuffer, imgIndex);
+
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+	VkSemaphore waitSemaphores[] = { m_imageAvailableSem };
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = waitSemaphores;
+	submitInfo.pWaitDstStageMask = waitStages;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &m_gfxCommandBuffer;
+
+	VkSemaphore signalSemaphores[] = { m_renderFinishedSem};
+
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = signalSemaphores;
+
+	if (vkQueueSubmit(m_vkGraphicsQueue, 1, &submitInfo, m_inFlightFence) != VK_SUCCESS) {
+		throw std::runtime_error("[Runtime error] Failed to submit draw command buffer!");
+	}
+
+	VkPresentInfoKHR presentInfo{};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = signalSemaphores;
+
+	VkSwapchainKHR swapChains[] = { m_vkSwapchain };
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = swapChains;
+	presentInfo.pImageIndices = &imgIndex;
+
+	presentInfo.pResults = nullptr; // Optional
+
+	vkQueuePresentKHR(m_vkGraphicsQueue, &presentInfo);
 
 }

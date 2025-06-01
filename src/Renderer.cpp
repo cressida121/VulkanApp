@@ -47,12 +47,22 @@ VulkanApp::Renderer::Renderer(Application* parent) : m_parent(parent){
 	subpassDesc.colorAttachmentCount = 1;
 	subpassDesc.pColorAttachments = &colorAttachmentRef;
 
+	VkSubpassDependency dependency{};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.srcAccessMask = 0;
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
 	VkRenderPassCreateInfo renderPassCI = {};
 	renderPassCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
 	renderPassCI.attachmentCount = 1;
 	renderPassCI.pAttachments = &attachmentDesc;
 	renderPassCI.subpassCount = 1;
 	renderPassCI.pSubpasses = &subpassDesc;
+	renderPassCI.dependencyCount = 1;
+	renderPassCI.pDependencies = &dependency;
 
 	if (vkCreateRenderPass(m_parent->m_vkLogicalDevice, &renderPassCI, nullptr, &m_vkRenderPass) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] Failed to create render pass");
@@ -192,6 +202,11 @@ VulkanApp::Renderer::Renderer(Application* parent) : m_parent(parent){
 }
 
 VulkanApp::Renderer::~Renderer() {
+
+	for (auto& fbuff : m_vkFramebuffers) {
+		vkDestroyFramebuffer(m_parent->m_vkLogicalDevice, fbuff, nullptr);
+	}
+
 	vkDestroyPipeline(m_parent->m_vkLogicalDevice, m_vkPipeline, nullptr);
 	vkDestroyPipelineLayout(m_parent->m_vkLogicalDevice, m_vkPipelineLayout, nullptr);
 	vkDestroyRenderPass(m_parent->m_vkLogicalDevice, m_vkRenderPass, nullptr);

@@ -13,7 +13,5 @@ int main() {
 		std::cout << e.what() <<std::endl;
 	}
 
-	std::cin.get();
-
 	return 0;
 }

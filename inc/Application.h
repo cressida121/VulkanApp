@@ -15,6 +15,8 @@ namespace VulkanApp {
 		Application(const uint32_t windowWidth, const uint32_t windowHeight);
 		~Application();
 		void Run();
+		void RenderFrame();
+
 	private:
 		static VkInstance CreateVkInstance(
 			const std::string& appName,
@@ -28,6 +30,7 @@ namespace VulkanApp {
 			VkSurfaceCapabilitiesKHR surfaceCapabilities,
 			VkSurfaceFormatKHR requiredFormat);
 		static std::vector<VkImageView> CreateImageViews(VkDevice logicalDevice, const std::vector<VkImage>& images, VkFormat format);
+		bool RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, uint32_t rendererIndex = 0u);
 
 		void* m_mainWindowHandle = nullptr;
 		VkSurfaceKHR m_vkSurface = VK_NULL_HANDLE;
@@ -42,6 +45,9 @@ namespace VulkanApp {
 		VkExtent2D m_swapchainExtent;
 		VkCommandPool m_gfxCommandPool;
 		VkCommandBuffer m_gfxCommandBuffer; // Destroyed along with VkCommandPool
+		VkSemaphore m_imageAvailableSem = VK_NULL_HANDLE;
+		VkSemaphore m_renderFinishedSem = VK_NULL_HANDLE;
+		VkFence m_inFlightFence = VK_NULL_HANDLE;
 
 		std::vector<Renderer*> m_renderers;
 	};
