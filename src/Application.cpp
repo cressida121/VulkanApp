@@ -279,19 +279,14 @@ HWND CreateSystemWindow(const std::wstring &name, const uint32_t windowWidth, co
 
 
 VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t windowHeight) 
-	:	m_mainWindowHandle(CreateSystemWindow(L"VulkanApp", windowWidth, windowHeight)) {
-	
-	// Specify required Vulkan extensions and layers
-	std::vector<std::string> extensions = { VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME };
-	std::vector<std::string> layers = { "VK_LAYER_KHRONOS_validation" };
+	:	m_mainWindowHandle(CreateSystemWindow(L"VulkanApp", windowWidth, windowHeight)),
+		m_vkCore("VulkanApp") {
 
-	// Create the Vulkan instance (library initialization)
-	m_vkInstance = CreateVkInstance("VulkanApp", extensions, layers);
-	if(m_vkInstance == VK_NULL_HANDLE) {
-		throw std::runtime_error("[Runtime error] Failed to create vkInstance");
-	}
+	m_vkInstance = m_vkCore.m_vkInstance;
+	m_vkPhysicalDevice = m_vkCore.m_vkPhysicalDevices;
+	m_vkLogicalDevice = m_vkCore.m_vkLogicalDevice;
+	m_vkGraphicsQueue = m_vkCore.m_vkQueue;
 
-	// Create the Win32 surface
 	VkWin32SurfaceCreateInfoKHR surfaceInfo = {};
 	{
 		surfaceInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -303,22 +298,6 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	if (vkCreateWin32SurfaceKHR(m_vkInstance, &surfaceInfo, nullptr, &m_vkSurface) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] Cannot create Win32SurfaceKHR");
 	}
-
-	// Create physical device
-	uint32_t devicesCount = 0;
-	if (vkEnumeratePhysicalDevices(m_vkInstance, &devicesCount, nullptr) != VK_SUCCESS) {
-		throw std::runtime_error("[Runtime error] Cannot enumerate physical devices");
-	}
-
-	if (devicesCount == 1) {
-		vkEnumeratePhysicalDevices(m_vkInstance, &devicesCount, &m_vkPhysicalDevice);
-	}
-	else {
-		throw std::runtime_error("[Runtime error] Multiple physical devices are not supported");
-	}
-
-	// Create logical device
-	m_vkLogicalDevice = CreateVkLogicalDevice(m_vkPhysicalDevice, m_vkGraphicsQueue, VK_QUEUE_GRAPHICS_BIT);
 
 	VkSurfaceCapabilitiesKHR capabilities;
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vkPhysicalDevice, m_vkSurface, &capabilities);

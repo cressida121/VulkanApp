@@ -6,6 +6,12 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan\vulkan.h>
 
+#include <CVulkanCore.h>
+
+/*
+The application design aims to reflect actual Vulkan
+resources dependencies
+*/
 
 namespace VulkanApp {
 	class Renderer;
@@ -32,19 +38,32 @@ namespace VulkanApp {
 		static std::vector<VkImageView> CreateImageViews(VkDevice logicalDevice, const std::vector<VkImage>& images, VkFormat format);
 		bool RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, uint32_t rendererIndex = 0u);
 
+		CVulkanCore m_vkCore;
+
+		// Window Manager 
 		void* m_mainWindowHandle = nullptr;
 		VkSurfaceKHR m_vkSurface = VK_NULL_HANDLE;
+		VkSurfaceFormatKHR m_vkSurfaceFormat;
+
+		// Vulkan Core
 		VkInstance m_vkInstance = VK_NULL_HANDLE;
 		VkPhysicalDevice m_vkPhysicalDevice = VK_NULL_HANDLE;
 		VkDevice m_vkLogicalDevice = VK_NULL_HANDLE;
+
+
 		VkQueue m_vkGraphicsQueue = VK_NULL_HANDLE;
+
+		// Swapchain Manager
 		VkSwapchainKHR m_vkSwapchain = VK_NULL_HANDLE;
 		std::vector<VkImage> m_swapchainImages;
 		std::vector<VkImageView> m_scImageViews;
-		VkSurfaceFormatKHR m_vkSurfaceFormat;
 		VkExtent2D m_swapchainExtent;
+
+		// Command manager
 		VkCommandPool m_gfxCommandPool;
 		VkCommandBuffer m_gfxCommandBuffer; // Destroyed along with VkCommandPool
+
+		// Pipeline
 		VkSemaphore m_imageAvailableSem = VK_NULL_HANDLE;
 		VkSemaphore m_renderFinishedSem = VK_NULL_HANDLE;
 		VkFence m_inFlightFence = VK_NULL_HANDLE;
