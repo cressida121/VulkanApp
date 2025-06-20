@@ -1,5 +1,6 @@
 #include <Application.h>
 #include <Renderer.h>
+#include <CVulkanSwapchain.h>
 
 #include <Windows.h>
 #include <iostream>
@@ -282,10 +283,10 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	:	m_mainWindowHandle(CreateSystemWindow(L"VulkanApp", windowWidth, windowHeight)),
 		m_vkCore("VulkanApp") {
 
-	m_vkInstance = m_vkCore.m_vkInstance;
-	m_vkPhysicalDevice = m_vkCore.m_vkPhysicalDevices;
-	m_vkLogicalDevice = m_vkCore.m_vkLogicalDevice;
-	m_vkGraphicsQueue = m_vkCore.m_vkQueue;
+	const VkInstance vkInstance = m_vkCore.m_vkInstance;
+	const VkPhysicalDevice vkPhysicalDevices = m_vkCore.m_vkPhysicalDevices;
+	const VkDevice vkLogicalDevice = m_vkCore.m_vkLogicalDevice;
+	const VkQueue vkGraphicsQueue = m_vkCore.m_vkQueue;
 
 	VkWin32SurfaceCreateInfoKHR surfaceInfo = {};
 	{
@@ -295,45 +296,30 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 		surfaceInfo.hwnd = static_cast<HWND>(m_mainWindowHandle);
 	}
 
-	if (vkCreateWin32SurfaceKHR(m_vkInstance, &surfaceInfo, nullptr, &m_vkSurface) != VK_SUCCESS) {
+	if (vkCreateWin32SurfaceKHR(vkInstance, &surfaceInfo, nullptr, &m_vkSurface) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] Cannot create Win32SurfaceKHR");
 	}
 
 	VkSurfaceCapabilitiesKHR capabilities;
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vkPhysicalDevice, m_vkSurface, &capabilities);
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkPhysicalDevices, m_vkSurface, &capabilities);
 
-	m_swapchainExtent = capabilities.currentExtent;
+	m_surfaceExtent = capabilities.currentExtent;
 	m_vkSurfaceFormat.format = VkFormat::VK_FORMAT_B8G8R8A8_SRGB;
 	m_vkSurfaceFormat.colorSpace = VkColorSpaceKHR::VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+	
+	m_vkSwapchain = new CVulkanSwapchain(&m_vkCore, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat);
 
-	// Create the swapchain
-	m_vkSwapchain = CreateVkSwapchain(m_vkPhysicalDevice, m_vkLogicalDevice, m_vkSurface, capabilities, m_vkSurfaceFormat);
-
-	// Retrieve the swap chain images
-	uint32_t imageCount = 0;
-	vkGetSwapchainImagesKHR(m_vkLogicalDevice, m_vkSwapchain, &imageCount, nullptr);
-
-	m_swapchainImages.resize(imageCount);
-
-	if (vkGetSwapchainImagesKHR(m_vkLogicalDevice, m_vkSwapchain, &imageCount, m_swapchainImages.data()) != VK_SUCCESS) {
-		throw std::runtime_error("[Runtime error] Cannot retrieve swapchain images");
-	}
-
-	// Create the views to the swapchain images
-	m_scImageViews = CreateImageViews(m_vkLogicalDevice, m_swapchainImages, m_vkSurfaceFormat.format);
-
-	new Renderer(this);
-
+	new Renderer(this, capabilities.currentExtent.width, capabilities.currentExtent.height);
 
 	// Create command pool
-	std::optional<uint32_t> qfIndex = getQueueFamilies(m_vkPhysicalDevice, VK_QUEUE_GRAPHICS_BIT);
+	std::optional<uint32_t> qfIndex = getQueueFamilies(vkPhysicalDevices, VK_QUEUE_GRAPHICS_BIT);
 	
 	VkCommandPoolCreateInfo commandPoolCI = {};
 	commandPoolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	commandPoolCI.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	commandPoolCI.queueFamilyIndex = qfIndex.value();
 
-	if (vkCreateCommandPool(m_vkLogicalDevice, &commandPoolCI, nullptr, &m_gfxCommandPool) != VK_SUCCESS) {
+	if (vkCreateCommandPool(vkLogicalDevice, &commandPoolCI, nullptr, &m_gfxCommandPool) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] Cannot create a command pool");
 	}
 
@@ -344,7 +330,7 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	commandBufferCI.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	commandBufferCI.commandBufferCount = 1;
 
-	if (vkAllocateCommandBuffers(m_vkLogicalDevice, &commandBufferCI, &m_gfxCommandBuffer) != VK_SUCCESS) {
+	if (vkAllocateCommandBuffers(vkLogicalDevice, &commandBufferCI, &m_gfxCommandBuffer) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] Failed to create a command pool");
 	}
 
@@ -357,258 +343,27 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	fenceCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	fenceCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-	if (vkCreateSemaphore(m_vkLogicalDevice, &semaphoreCI, nullptr, &m_imageAvailableSem) != VK_SUCCESS ||
-		vkCreateSemaphore(m_vkLogicalDevice, &semaphoreCI, nullptr, &m_renderFinishedSem) != VK_SUCCESS ||
-		vkCreateFence(m_vkLogicalDevice, &fenceCI, nullptr, &m_inFlightFence) != VK_SUCCESS) {
+	if (vkCreateSemaphore(vkLogicalDevice, &semaphoreCI, nullptr, &m_imageAvailableSem) != VK_SUCCESS ||
+		vkCreateSemaphore(vkLogicalDevice, &semaphoreCI, nullptr, &m_renderFinishedSem) != VK_SUCCESS ||
+		vkCreateFence(vkLogicalDevice, &fenceCI, nullptr, &m_inFlightFence) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] failed to create semaphores");
 	}
 }
 
 VulkanApp::Application::~Application() {
 	
-	vkDestroySemaphore(m_vkLogicalDevice, m_imageAvailableSem, nullptr);
-	vkDestroySemaphore(m_vkLogicalDevice, m_renderFinishedSem, nullptr);
-	vkDestroyFence(m_vkLogicalDevice, m_inFlightFence, nullptr);
+	vkDestroySemaphore(m_vkCore.m_vkLogicalDevice, m_imageAvailableSem, nullptr);
+	vkDestroySemaphore(m_vkCore.m_vkLogicalDevice, m_renderFinishedSem, nullptr);
+	vkDestroyFence(m_vkCore.m_vkLogicalDevice, m_inFlightFence, nullptr);
 
-	vkDestroyCommandPool(m_vkLogicalDevice, m_gfxCommandPool, nullptr);
+	vkDestroyCommandPool(m_vkCore.m_vkLogicalDevice, m_gfxCommandPool, nullptr);
 
 	for (auto& renderer : m_renderers) {
 		delete renderer;
 	}
 
-	for (auto& imageView : m_scImageViews) {
-		vkDestroyImageView(m_vkLogicalDevice, imageView, nullptr);
-	}
-
-
-	vkDestroySwapchainKHR(m_vkLogicalDevice, m_vkSwapchain, nullptr);
-
 	// Cleanup created Vulkan resources
-	vkDestroyDevice(m_vkLogicalDevice, nullptr);
-	vkDestroySurfaceKHR(m_vkInstance, m_vkSurface, nullptr);
-	vkDestroyInstance(m_vkInstance, nullptr);
-
-}
-
-VkInstance VulkanApp::Application::CreateVkInstance(
-	const std::string &appName, 
-	const std::vector<std::string> &extensions,
-	const std::vector<std::string> &layers) {
-
-	// Fill Vulkan application descriptor
-	VkApplicationInfo vkAppInfo = {};
-	{
-		vkAppInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-		vkAppInfo.pApplicationName = appName.data();
-		vkAppInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-		vkAppInfo.pEngineName = "";
-		vkAppInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-		vkAppInfo.apiVersion = VK_API_VERSION_1_0;
-	}
-
-	// Fill Vulkan instance descriptor
-	VkInstanceCreateInfo instanceInfo = {};
-	instanceInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	instanceInfo.pApplicationInfo = &vkAppInfo;
-	
-	// Select required Vulkan extensions (check available ones using getSupportedExtenstions())
-	std::vector<const char*> extensionNames;
-	for (auto& extension : extensions)
-		extensionNames.push_back(extension.data());
-
-	instanceInfo.enabledExtensionCount = extensionNames.size();
-	instanceInfo.ppEnabledExtensionNames = extensionNames.data();
-
-	// Select required Vulkan layers (check available ones using getAvailableInstanceLayers())
-	std::vector<const char*> layerNames;
-	for (auto& layer : layers)
-		layerNames.push_back(layer.data());
-
-	instanceInfo.enabledLayerCount = layerNames.size();
-	instanceInfo.ppEnabledLayerNames = layerNames.data();
-	
-	VkInstance vkInstance = nullptr;
-
-	// Create Vulkan instance using collected information
-	if (vkCreateInstance(&instanceInfo, nullptr, &vkInstance) != VK_SUCCESS)
-		return nullptr;
-
-	return vkInstance;
-}
-
-VkDevice VulkanApp::Application::CreateVkLogicalDevice(VkPhysicalDevice physicalDevice, VkQueue &outGraphicsQueue, VkQueueFlags queueFlags)
-{
-	// Get index of the required queue family
-	std::optional<uint32_t> qfIndex = getQueueFamilies(physicalDevice, queueFlags);
-
-	if (!qfIndex.has_value()) {
-		throw std::runtime_error("[Runtime error] Required queue family not found");
-	}
-
-	VkBool32 presentationSupport = 0;
-	presentationSupport = vkGetPhysicalDeviceWin32PresentationSupportKHR(physicalDevice, qfIndex.value());
-
-	if (!presentationSupport) {
-		throw std::runtime_error("[Runtime error] Presentation mode not supported");
-	}
-
-	// Prepare the device queue info
-	VkDeviceQueueCreateInfo queueInfo = {};
-	{
-		queueInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		queueInfo.queueFamilyIndex = qfIndex.value();
-		queueInfo.queueCount = 1;
-		float priority = 1.0f;
-		queueInfo.pQueuePriorities = &priority;
-	}
-
-	// Select required device features
-	VkPhysicalDeviceFeatures features = {};
-
-	// Prepare logical device info
-	VkDeviceCreateInfo deviceInfo = {};
-	{
-		deviceInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-		deviceInfo.pQueueCreateInfos = &queueInfo;
-		deviceInfo.queueCreateInfoCount = 1;
-		deviceInfo.pEnabledFeatures = &features;
-		const char* extensions = VK_KHR_SWAPCHAIN_EXTENSION_NAME;
-		deviceInfo.ppEnabledExtensionNames = &extensions;
-		deviceInfo.enabledExtensionCount = 1;
-	}
-
-	// Create logical device itself
-	VkDevice logicalDevice = VK_NULL_HANDLE;
-	
-	if (vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &logicalDevice) != VK_SUCCESS) {
-		throw std::runtime_error("[Runtime error] Failed to create a logical device");
-	}
-	
-	VkQueue graphicsQueue = VK_NULL_HANDLE;
-
-	// Retrieve the queue handle
-	vkGetDeviceQueue(logicalDevice, qfIndex.value(), 0, &graphicsQueue);
-	if (graphicsQueue == VK_NULL_HANDLE) {
-		throw std::runtime_error("[Runtime error] Cannot obtain a handle to the queue");
-	}
-	
-	outGraphicsQueue = graphicsQueue;
-
-	return logicalDevice;
-}
-
-VkSwapchainKHR VulkanApp::Application::CreateVkSwapchain(
-	VkPhysicalDevice physicalDevice, 
-	VkDevice logicalDevice,
-	VkSurfaceKHR surface,
-	VkSurfaceCapabilitiesKHR surfaceCapabilities,
-	VkSurfaceFormatKHR requiredFormat)
-{
-	VkSwapchainCreateInfoKHR swapchainInfo = {};
-
-	swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-	swapchainInfo.pNext = nullptr;
-	swapchainInfo.flags = NULL;
-	swapchainInfo.surface = surface;
-
-	// Retrieve the detalis about swapchains
-
-	swapchainInfo.minImageCount = surfaceCapabilities.minImageCount + 1;
-	swapchainInfo.imageExtent = surfaceCapabilities.currentExtent;
-	swapchainInfo.imageArrayLayers = surfaceCapabilities.maxImageArrayLayers;
-
-	// Surface formats for the physical device
-	uint32_t count = 0;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &count, nullptr);
-
-	std::vector<VkSurfaceFormatKHR> formats(count);
-	vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &count, formats.data());
-
-	// Selecting required format and color space
-	bool formatFound = false;
-	for (auto& format : formats) {
-		if (format.format == requiredFormat.format &&
-			format.colorSpace == requiredFormat.colorSpace) {
-			swapchainInfo.imageFormat = requiredFormat.format;
-			swapchainInfo.imageColorSpace = requiredFormat.colorSpace;
-			formatFound = true;
-			break;
-		}
-	}
-
-	if (!formatFound) {
-		throw std::runtime_error("[Runtime error] Specified VkSurfaceFormatKHR is not supported by the device");
-	}
-
-	swapchainInfo.imageUsage = VkImageUsageFlagBits::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-	swapchainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-	swapchainInfo.queueFamilyIndexCount = 0;
-	swapchainInfo.pQueueFamilyIndices = nullptr;
-	swapchainInfo.preTransform = surfaceCapabilities.currentTransform;
-	swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-
-	// Available present modes
-	vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &count, nullptr);
-
-	std::vector<VkPresentModeKHR> presentModes(count);
-	vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &count, presentModes.data());
-
-	bool presentModeFound = false;
-	for (auto& presentMode : presentModes) {
-		if (presentMode == VK_PRESENT_MODE_FIFO_KHR) {
-			swapchainInfo.presentMode = presentMode;
-			presentModeFound = true;
-			break;
-		}
-	}
-
-	if (!presentModeFound) {
-		throw std::runtime_error("[Runtime error] Specified present mode not supported");
-	}
-
-	swapchainInfo.clipped = VK_TRUE;
-	swapchainInfo.oldSwapchain = VK_NULL_HANDLE;
-
-	VkSwapchainKHR swapchain = VK_NULL_HANDLE;
-	if (vkCreateSwapchainKHR(logicalDevice, &swapchainInfo, nullptr, &swapchain) != VK_SUCCESS) {
-		throw std::runtime_error("[Runtime error] Swapchain creation failed");
-	}
-	
-	return swapchain;
-}
-
-std::vector<VkImageView> VulkanApp::Application::CreateImageViews(VkDevice logicalDevice, const std::vector<VkImage>& images, VkFormat format)
-{
-	std::vector<VkImageView> imageViews;
-
-	imageViews.resize(images.size());
-
-	for (uint32_t i = 0; i < images.size(); i++) {
-
-		VkImageViewCreateInfo createInfo = {};
-		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-		createInfo.image = images[i];
-		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-		createInfo.format = format;
-
-		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-
-		createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-		createInfo.subresourceRange.baseMipLevel = 0;
-		createInfo.subresourceRange.levelCount = 1;
-		createInfo.subresourceRange.baseArrayLayer = 0;
-		createInfo.subresourceRange.layerCount = 1;
-
-		if (vkCreateImageView(logicalDevice, &createInfo, nullptr, imageViews.data() + i) != VK_SUCCESS) {
-			throw std::runtime_error("[Runtime error] Cannot create an image view");
-		}
-
-	}
-
-	return imageViews;
+	vkDestroySurfaceKHR(m_vkCore.m_vkInstance, m_vkSurface, nullptr);
 }
 
 bool VulkanApp::Application::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, uint32_t rendererIndex) {
@@ -630,7 +385,7 @@ bool VulkanApp::Application::RecordCommandBuffer(VkCommandBuffer commandBuffer, 
 	renderPassCI.renderPass = m_renderers.at(rendererIndex)->GetRenderPass();
 	renderPassCI.framebuffer = m_renderers.at(rendererIndex)->GetFramebuffer(imageIndex);
 	renderPassCI.renderArea.offset = { 0, 0 };
-	renderPassCI.renderArea.extent = m_swapchainExtent;
+	renderPassCI.renderArea.extent = m_surfaceExtent;
 
 	VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
 	renderPassCI.clearValueCount = 1;
@@ -663,16 +418,16 @@ void VulkanApp::Application::Run() {
 		RenderFrame();
 	}
 
-	vkDeviceWaitIdle(m_vkLogicalDevice);
+	vkDeviceWaitIdle(m_vkCore.m_vkLogicalDevice);
 }
 
 void VulkanApp::Application::RenderFrame() {
 	
-	vkWaitForFences(m_vkLogicalDevice, 1u, &m_inFlightFence, VK_TRUE, UINT64_MAX);
-	vkResetFences(m_vkLogicalDevice, 1u, &m_inFlightFence);
+	vkWaitForFences(m_vkCore.m_vkLogicalDevice, 1u, &m_inFlightFence, VK_TRUE, UINT64_MAX);
+	vkResetFences(m_vkCore.m_vkLogicalDevice, 1u, &m_inFlightFence);
 
 	uint32_t imgIndex = 0u;
-	vkAcquireNextImageKHR(m_vkLogicalDevice, m_vkSwapchain, UINT64_MAX, m_imageAvailableSem, NULL, &imgIndex);
+	vkAcquireNextImageKHR(m_vkCore.m_vkLogicalDevice, m_vkCore.m_pOwnedSwapchains[0]->m_vkSwapchain, UINT64_MAX, m_imageAvailableSem, NULL, &imgIndex);
 
 	vkResetCommandBuffer(m_gfxCommandBuffer, 0);
 	RecordCommandBuffer(m_gfxCommandBuffer, imgIndex);
@@ -693,7 +448,7 @@ void VulkanApp::Application::RenderFrame() {
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = signalSemaphores;
 
-	if (vkQueueSubmit(m_vkGraphicsQueue, 1, &submitInfo, m_inFlightFence) != VK_SUCCESS) {
+	if (vkQueueSubmit(m_vkCore.m_vkQueue, 1, &submitInfo, m_inFlightFence) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] Failed to submit draw command buffer!");
 	}
 
@@ -703,13 +458,13 @@ void VulkanApp::Application::RenderFrame() {
 	presentInfo.waitSemaphoreCount = 1;
 	presentInfo.pWaitSemaphores = signalSemaphores;
 
-	VkSwapchainKHR swapChains[] = { m_vkSwapchain };
+	VkSwapchainKHR swapChains[] = { m_vkCore.m_pOwnedSwapchains[0]->m_vkSwapchain };
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = swapChains;
 	presentInfo.pImageIndices = &imgIndex;
 
 	presentInfo.pResults = nullptr; // Optional
 
-	vkQueuePresentKHR(m_vkGraphicsQueue, &presentInfo);
+	vkQueuePresentKHR(m_vkCore.m_vkQueue, &presentInfo);
 
 }

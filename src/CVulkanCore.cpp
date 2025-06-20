@@ -110,6 +110,14 @@ VulkanApp::CVulkanCore::CVulkanCore(const std::string& applicationName) : m_appl
 }
 
 VulkanApp::CVulkanCore::~CVulkanCore() {
+
+	// Delete all created swapchains
+	for (auto pSwapchain : m_pOwnedSwapchains) {
+		if (pSwapchain) {
+			delete pSwapchain;
+		}
+	}
+
 	if (m_vkLogicalDevice)
 		vkDestroyDevice(m_vkLogicalDevice, nullptr);
 		

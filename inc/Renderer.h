@@ -10,7 +10,7 @@ namespace VulkanApp {
 	class Application;
 	class Renderer {
 	public:
-		Renderer(Application* parent);
+		Renderer(Application* parent, const uint32_t renderAreaWidth, const uint32_t renderAreaHeight);
 		~Renderer();
 		VkRenderPass GetRenderPass() const;
 		VkFramebuffer GetFramebuffer(uint32_t index) const;

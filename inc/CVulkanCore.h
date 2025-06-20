@@ -4,6 +4,7 @@
 #include <vulkan/vulkan_core.h>
 
 #include <string>
+#include <vector>
 
 #define VK_APP_EXC_MSG(msg, code) CreateExceptionMessage(msg, code, __FILE__, __LINE__)
 
@@ -12,6 +13,7 @@ namespace VulkanApp {
 	std::string CreateExceptionMessage(const std::string msg,VkResult code, const std::string file, uint32_t line);
 
 	class CVulkanCore {
+		friend class CVulkanSwapchain;
 	public:	
 		CVulkanCore(const std::string& applicationName);
 		~CVulkanCore();
@@ -28,6 +30,8 @@ namespace VulkanApp {
 		VkDevice m_vkLogicalDevice = VK_NULL_HANDLE;
 		VkQueue m_vkQueue = VK_NULL_HANDLE;
 		uint32_t m_queueFamilyIndex = 0u;
+
+		std::vector<CVulkanSwapchain*> m_pOwnedSwapchains;
 
 	};
 

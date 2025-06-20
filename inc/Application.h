@@ -24,40 +24,16 @@ namespace VulkanApp {
 		void RenderFrame();
 
 	private:
-		static VkInstance CreateVkInstance(
-			const std::string& appName,
-			const std::vector<std::string>& extensions,
-			const std::vector<std::string>& layers);
-		static VkDevice CreateVkLogicalDevice(VkPhysicalDevice physicalDevice, VkQueue &outGraphicsQueue, VkQueueFlags queueFlags);
-		static VkSwapchainKHR CreateVkSwapchain(
-			VkPhysicalDevice physicalDevice,
-			VkDevice logicalDevice,
-			VkSurfaceKHR surface, 
-			VkSurfaceCapabilitiesKHR surfaceCapabilities,
-			VkSurfaceFormatKHR requiredFormat);
-		static std::vector<VkImageView> CreateImageViews(VkDevice logicalDevice, const std::vector<VkImage>& images, VkFormat format);
 		bool RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, uint32_t rendererIndex = 0u);
 
 		CVulkanCore m_vkCore;
+		CVulkanSwapchain *m_vkSwapchain = nullptr;
 
-		// Window Manager 
+		// Window Manager - Win32 window system adapter class
 		void* m_mainWindowHandle = nullptr;
 		VkSurfaceKHR m_vkSurface = VK_NULL_HANDLE;
 		VkSurfaceFormatKHR m_vkSurfaceFormat;
-
-		// Vulkan Core
-		VkInstance m_vkInstance = VK_NULL_HANDLE;
-		VkPhysicalDevice m_vkPhysicalDevice = VK_NULL_HANDLE;
-		VkDevice m_vkLogicalDevice = VK_NULL_HANDLE;
-
-
-		VkQueue m_vkGraphicsQueue = VK_NULL_HANDLE;
-
-		// Swapchain Manager
-		VkSwapchainKHR m_vkSwapchain = VK_NULL_HANDLE;
-		std::vector<VkImage> m_swapchainImages;
-		std::vector<VkImageView> m_scImageViews;
-		VkExtent2D m_swapchainExtent;
+		VkExtent2D m_surfaceExtent;
 
 		// Command manager
 		VkCommandPool m_gfxCommandPool;
@@ -69,5 +45,6 @@ namespace VulkanApp {
 		VkFence m_inFlightFence = VK_NULL_HANDLE;
 
 		std::vector<Renderer*> m_renderers;
+
 	};
 }
