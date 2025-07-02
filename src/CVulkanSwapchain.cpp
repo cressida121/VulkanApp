@@ -3,6 +3,8 @@
 
 #include <stdexcept>
 
+#include <Utilities.h>
+
 VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 	CVulkanCore *const pParent,
 	const uint32_t width,
@@ -11,7 +13,7 @@ VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 	VkSurfaceFormatKHR surfaceFormat) : m_pParent(pParent) {
 
 	if (m_pParent == nullptr) {
-		throw std::runtime_error("CVulkanSwapchain parent was null");
+		throw std::runtime_error(UTIL_EXC_MSG( "Pointer to parent object was null"));
 	}
 
 	VkSwapchainCreateInfoKHR swapchainCI = {};
@@ -24,14 +26,14 @@ VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 	// Retrieve the detalis about swapchains
 
 	VkSurfaceCapabilitiesKHR capabilities;
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_pParent->m_vkPhysicalDevices, surface, &capabilities);
-
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_pParent->GetVkPhysicalDevice(), surface, &capabilities);
+	
 	if (width > capabilities.maxImageExtent.width ||
 		height > capabilities.maxImageExtent.height ||
 		width < capabilities.minImageExtent.width ||
 		height < capabilities.minImageExtent.height) {
 
-		throw std::runtime_error("Invalid swapchain extent");
+		throw std::runtime_error(UTIL_EXC_MSG("Invalid swapchain extent"));
 	}
 
 	swapchainCI.imageExtent.width = width;
@@ -41,10 +43,10 @@ VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 
 	// Surface formats for the physical device
 	uint32_t count = 0;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(m_pParent->m_vkPhysicalDevices, surface, &count, nullptr);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(m_pParent->GetVkPhysicalDevice(), surface, &count, nullptr);
 
 	std::vector<VkSurfaceFormatKHR> formats(count);
-	vkGetPhysicalDeviceSurfaceFormatsKHR(m_pParent->m_vkPhysicalDevices, surface, &count, formats.data());
+	vkGetPhysicalDeviceSurfaceFormatsKHR(m_pParent->GetVkPhysicalDevice(), surface, &count, formats.data());
 
 	// Selecting required format and color space
 	bool formatFound = false;
@@ -59,7 +61,7 @@ VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 	}
 
 	if (!formatFound) {
-		throw std::runtime_error("[Runtime error] Specified VkSurfaceFormatKHR is not supported by the device");
+		throw std::runtime_error(UTIL_EXC_MSG("Specified VkSurfaceFormatKHR is not supported by the device"));
 	}
 
 	swapchainCI.imageUsage = VkImageUsageFlagBits::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
@@ -70,10 +72,10 @@ VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 	swapchainCI.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 
 	// Available present modes
-	vkGetPhysicalDeviceSurfacePresentModesKHR(m_pParent->m_vkPhysicalDevices, surface, &count, nullptr);
+	vkGetPhysicalDeviceSurfacePresentModesKHR(m_pParent->GetVkPhysicalDevice(), surface, &count, nullptr);
 
 	std::vector<VkPresentModeKHR> presentModes(count);
-	vkGetPhysicalDeviceSurfacePresentModesKHR(m_pParent->m_vkPhysicalDevices, surface, &count, presentModes.data());
+	vkGetPhysicalDeviceSurfacePresentModesKHR(m_pParent->GetVkPhysicalDevice(), surface, &count, presentModes.data());
 
 	bool presentModeFound = false;
 	for (auto& presentMode : presentModes) {
@@ -85,31 +87,36 @@ VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 	}
 
 	if (!presentModeFound) {
-		throw std::runtime_error("[Runtime error] Specified present mode not supported");
+		throw std::runtime_error(UTIL_EXC_MSG("Specified present mode is not supported"));
 	}
 
 	swapchainCI.clipped = VK_TRUE;
 	swapchainCI.oldSwapchain = VK_NULL_HANDLE;
 
-	if (vkCreateSwapchainKHR(m_pParent->m_vkLogicalDevice, &swapchainCI, nullptr, &m_vkSwapchain) != VK_SUCCESS) {
-		throw std::runtime_error("[Runtime error] Swapchain creation failed");
+	VkResult result = vkCreateSwapchainKHR(m_pParent->GetVkLogicalDevice(), &swapchainCI, nullptr, &m_vkSwapchain);
+	if(result != VK_SUCCESS) {
+		throw std::runtime_error(UTIL_EXC_MSG_EX("Swapchain creation failed", result));
 	}
 
 	// Retrieve the swap chain images
 	uint32_t imageCount = 0;
-	vkGetSwapchainImagesKHR(m_pParent->m_vkLogicalDevice, m_vkSwapchain, &imageCount, nullptr);
+	result = vkGetSwapchainImagesKHR(m_pParent->GetVkLogicalDevice(), m_vkSwapchain, &imageCount, nullptr);
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error(UTIL_EXC_MSG_EX("Failed to obtain swapchain images count", result));
+	}
 
 	m_swapchainImages.resize(imageCount);
 
-	if (vkGetSwapchainImagesKHR(m_pParent->m_vkLogicalDevice, m_vkSwapchain, &imageCount, m_swapchainImages.data()) != VK_SUCCESS) {
-		throw std::runtime_error("[Runtime error] Cannot retrieve swapchain images");
+	result = vkGetSwapchainImagesKHR(m_pParent->GetVkLogicalDevice(), m_vkSwapchain, &imageCount, m_swapchainImages.data());
+	if(result != VK_SUCCESS) {
+		throw std::runtime_error(UTIL_EXC_MSG_EX("Cannot retrieve swapchain images", result));
 	}
 
 	// Create the views to the swapchain images
 
-	m_scImageViews.resize(m_swapchainImages.size());
+	m_swapchainImageViews.resize(m_swapchainImages.size());
 
-	for (uint32_t i = 0; i < m_scImageViews.size(); i++) {
+	for (uint32_t i = 0; i < m_swapchainImageViews.size(); i++) {
 
 		VkImageViewCreateInfo createInfo = {};
 		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -128,32 +135,29 @@ VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 		createInfo.subresourceRange.baseArrayLayer = 0;
 		createInfo.subresourceRange.layerCount = 1;
 
-		if (vkCreateImageView(m_pParent->m_vkLogicalDevice, &createInfo, nullptr, m_scImageViews.data() + i) != VK_SUCCESS) {
-			throw std::runtime_error("[Runtime error] Cannot create an image view");
+		result = vkCreateImageView(m_pParent->GetVkLogicalDevice(), &createInfo, nullptr, m_swapchainImageViews.data() + i);
+		if(result != VK_SUCCESS) {
+			throw std::runtime_error(UTIL_EXC_MSG_EX("Cannot create an image view", result));
 		}
 
 	}
 
-	m_pParent->m_pOwnedSwapchains.push_back(this);
+	m_pParent->RegisterManagedSwapchain(this);
 }
 
 VulkanApp::CVulkanSwapchain::~CVulkanSwapchain() {
 	
 	// Unregister from parent object
-	for (uint32_t i = 0; i < m_pParent->m_pOwnedSwapchains.size(); i++) {
-		if (this == m_pParent->m_pOwnedSwapchains[i]) {
-			m_pParent->m_pOwnedSwapchains[i] = nullptr;
-		}
-	}
+	m_pParent->UnregisterManagedSwapchain(this);
 
-	for (auto imageView : m_scImageViews) {
+	for (auto imageView : m_swapchainImageViews) {
 		if (imageView) {
-			vkDestroyImageView(m_pParent->m_vkLogicalDevice, imageView, nullptr);
+			vkDestroyImageView(m_pParent->GetVkLogicalDevice(), imageView, nullptr);
 		}
 	}
 
 	if (m_vkSwapchain) {
-		vkDestroySwapchainKHR(m_pParent->m_vkLogicalDevice, m_vkSwapchain, nullptr);
+		vkDestroySwapchainKHR(m_pParent->GetVkLogicalDevice(), m_vkSwapchain, nullptr);
 	}
 
 }

@@ -283,11 +283,6 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	:	m_mainWindowHandle(CreateSystemWindow(L"VulkanApp", windowWidth, windowHeight)),
 		m_vkCore("VulkanApp") {
 
-	const VkInstance vkInstance = m_vkCore.m_vkInstance;
-	const VkPhysicalDevice vkPhysicalDevices = m_vkCore.m_vkPhysicalDevices;
-	const VkDevice vkLogicalDevice = m_vkCore.m_vkLogicalDevice;
-	const VkQueue vkGraphicsQueue = m_vkCore.m_vkQueue;
-
 	VkWin32SurfaceCreateInfoKHR surfaceInfo = {};
 	{
 		surfaceInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -296,12 +291,12 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 		surfaceInfo.hwnd = static_cast<HWND>(m_mainWindowHandle);
 	}
 
-	if (vkCreateWin32SurfaceKHR(vkInstance, &surfaceInfo, nullptr, &m_vkSurface) != VK_SUCCESS) {
+	if (vkCreateWin32SurfaceKHR(m_vkCore.GetVkInstance(), &surfaceInfo, nullptr, &m_vkSurface) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] Cannot create Win32SurfaceKHR");
 	}
 
 	VkSurfaceCapabilitiesKHR capabilities;
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(vkPhysicalDevices, m_vkSurface, &capabilities);
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vkCore.GetVkPhysicalDevice(), m_vkSurface, &capabilities);
 
 	m_surfaceExtent = capabilities.currentExtent;
 	m_vkSurfaceFormat.format = VkFormat::VK_FORMAT_B8G8R8A8_SRGB;
@@ -312,14 +307,14 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	new Renderer(this, capabilities.currentExtent.width, capabilities.currentExtent.height);
 
 	// Create command pool
-	std::optional<uint32_t> qfIndex = getQueueFamilies(vkPhysicalDevices, VK_QUEUE_GRAPHICS_BIT);
+	std::optional<uint32_t> qfIndex = getQueueFamilies(m_vkCore.GetVkPhysicalDevice(), VK_QUEUE_GRAPHICS_BIT);
 	
 	VkCommandPoolCreateInfo commandPoolCI = {};
 	commandPoolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	commandPoolCI.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	commandPoolCI.queueFamilyIndex = qfIndex.value();
 
-	if (vkCreateCommandPool(vkLogicalDevice, &commandPoolCI, nullptr, &m_gfxCommandPool) != VK_SUCCESS) {
+	if (vkCreateCommandPool(m_vkCore.GetVkLogicalDevice(), &commandPoolCI, nullptr, &m_gfxCommandPool) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] Cannot create a command pool");
 	}
 
@@ -330,7 +325,7 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	commandBufferCI.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	commandBufferCI.commandBufferCount = 1;
 
-	if (vkAllocateCommandBuffers(vkLogicalDevice, &commandBufferCI, &m_gfxCommandBuffer) != VK_SUCCESS) {
+	if (vkAllocateCommandBuffers(m_vkCore.GetVkLogicalDevice(), &commandBufferCI, &m_gfxCommandBuffer) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] Failed to create a command pool");
 	}
 
@@ -343,27 +338,27 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	fenceCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	fenceCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-	if (vkCreateSemaphore(vkLogicalDevice, &semaphoreCI, nullptr, &m_imageAvailableSem) != VK_SUCCESS ||
-		vkCreateSemaphore(vkLogicalDevice, &semaphoreCI, nullptr, &m_renderFinishedSem) != VK_SUCCESS ||
-		vkCreateFence(vkLogicalDevice, &fenceCI, nullptr, &m_inFlightFence) != VK_SUCCESS) {
+	if (vkCreateSemaphore(m_vkCore.GetVkLogicalDevice(), &semaphoreCI, nullptr, &m_imageAvailableSem) != VK_SUCCESS ||
+		vkCreateSemaphore(m_vkCore.GetVkLogicalDevice(), &semaphoreCI, nullptr, &m_renderFinishedSem) != VK_SUCCESS ||
+		vkCreateFence(m_vkCore.GetVkLogicalDevice(), &fenceCI, nullptr, &m_inFlightFence) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] failed to create semaphores");
 	}
 }
 
 VulkanApp::Application::~Application() {
 	
-	vkDestroySemaphore(m_vkCore.m_vkLogicalDevice, m_imageAvailableSem, nullptr);
-	vkDestroySemaphore(m_vkCore.m_vkLogicalDevice, m_renderFinishedSem, nullptr);
-	vkDestroyFence(m_vkCore.m_vkLogicalDevice, m_inFlightFence, nullptr);
+	vkDestroySemaphore(m_vkCore.GetVkLogicalDevice(), m_imageAvailableSem, nullptr);
+	vkDestroySemaphore(m_vkCore.GetVkLogicalDevice(), m_renderFinishedSem, nullptr);
+	vkDestroyFence(m_vkCore.GetVkLogicalDevice(), m_inFlightFence, nullptr);
 
-	vkDestroyCommandPool(m_vkCore.m_vkLogicalDevice, m_gfxCommandPool, nullptr);
+	vkDestroyCommandPool(m_vkCore.GetVkLogicalDevice(), m_gfxCommandPool, nullptr);
 
 	for (auto& renderer : m_renderers) {
 		delete renderer;
 	}
 
 	// Cleanup created Vulkan resources
-	vkDestroySurfaceKHR(m_vkCore.m_vkInstance, m_vkSurface, nullptr);
+	vkDestroySurfaceKHR(m_vkCore.GetVkInstance(), m_vkSurface, nullptr);
 }
 
 bool VulkanApp::Application::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, uint32_t rendererIndex) {
@@ -418,16 +413,16 @@ void VulkanApp::Application::Run() {
 		RenderFrame();
 	}
 
-	vkDeviceWaitIdle(m_vkCore.m_vkLogicalDevice);
+	vkDeviceWaitIdle(m_vkCore.GetVkLogicalDevice());
 }
 
 void VulkanApp::Application::RenderFrame() {
 	
-	vkWaitForFences(m_vkCore.m_vkLogicalDevice, 1u, &m_inFlightFence, VK_TRUE, UINT64_MAX);
-	vkResetFences(m_vkCore.m_vkLogicalDevice, 1u, &m_inFlightFence);
+	vkWaitForFences(m_vkCore.GetVkLogicalDevice(), 1u, &m_inFlightFence, VK_TRUE, UINT64_MAX);
+	vkResetFences(m_vkCore.GetVkLogicalDevice(), 1u, &m_inFlightFence);
 
 	uint32_t imgIndex = 0u;
-	vkAcquireNextImageKHR(m_vkCore.m_vkLogicalDevice, m_vkCore.m_pOwnedSwapchains[0]->m_vkSwapchain, UINT64_MAX, m_imageAvailableSem, NULL, &imgIndex);
+	vkAcquireNextImageKHR(m_vkCore.GetVkLogicalDevice(), m_vkSwapchain->GetSwapchain(), UINT64_MAX, m_imageAvailableSem, NULL, &imgIndex);
 
 	vkResetCommandBuffer(m_gfxCommandBuffer, 0);
 	RecordCommandBuffer(m_gfxCommandBuffer, imgIndex);
@@ -435,18 +430,15 @@ void VulkanApp::Application::RenderFrame() {
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-	VkSemaphore waitSemaphores[] = { m_imageAvailableSem };
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = waitSemaphores;
+	submitInfo.pWaitSemaphores = &m_imageAvailableSem; // Semaphore will be signaled by vkAcquireNextImage 
 	submitInfo.pWaitDstStageMask = waitStages;
 	submitInfo.commandBufferCount = 1;
 	submitInfo.pCommandBuffers = &m_gfxCommandBuffer;
 
-	VkSemaphore signalSemaphores[] = { m_renderFinishedSem};
-
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = signalSemaphores;
+	submitInfo.pSignalSemaphores = &m_renderFinishedSem;
 
 	if (vkQueueSubmit(m_vkCore.m_vkQueue, 1, &submitInfo, m_inFlightFence) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] Failed to submit draw command buffer!");
@@ -456,9 +448,9 @@ void VulkanApp::Application::RenderFrame() {
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = signalSemaphores;
+	presentInfo.pWaitSemaphores = &m_renderFinishedSem;
 
-	VkSwapchainKHR swapChains[] = { m_vkCore.m_pOwnedSwapchains[0]->m_vkSwapchain };
+	VkSwapchainKHR swapChains[] = { m_vkSwapchain->GetSwapchain() };
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = swapChains;
 	presentInfo.pImageIndices = &imgIndex;

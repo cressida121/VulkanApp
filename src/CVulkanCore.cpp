@@ -1,9 +1,9 @@
 #include <CVulkanCore.h>
+#include <CVulkanSwapchain.h>
 
 #include <vector>
 #include <stdexcept>
 #include <optional>
-#include <sstream>
 
 #ifdef _WIN32
 
@@ -19,7 +19,7 @@ constexpr std::string_view cexp_platform_extension = VK_KHR_MACOS_SURFACE_EXTENS
 
 #endif
 
-#include <vulkan/vk_enum_string_helper.h>
+#include <Utilities.h>
 
 static std::vector<uint32_t> GetQueueFamilyIndexList(const VkPhysicalDevice device, const VkQueueFlags queueFlags) {
 
@@ -50,23 +50,23 @@ VulkanApp::CVulkanCore::CVulkanCore(const std::string& applicationName) : m_appl
 	VkResult code;
 	
 	// Create the instance
-	if (code = CreateVkInstance()) {
-		throw std::runtime_error(VK_APP_EXC_MSG("Failed to create a Vulkan instance", code));
+	if (code = InitVkInstance()) {
+		throw std::runtime_error(UTIL_EXC_MSG_EX("Failed to create a Vulkan instance", code));
 	}
 
 	// Create physical device
 	if (code = vkEnumeratePhysicalDevices(m_vkInstance, &m_physicalDevicesCount, nullptr)) {
-		throw std::runtime_error(VK_APP_EXC_MSG("Failed to enumerate physical devices", code));
+		throw std::runtime_error(UTIL_EXC_MSG_EX("Failed to enumerate physical devices", code));
 	}
 
 	if (m_physicalDevicesCount > 0) {
 		code = vkEnumeratePhysicalDevices(m_vkInstance, &m_physicalDevicesCount, &m_vkPhysicalDevices);
 		if (code) {
-			throw std::runtime_error(VK_APP_EXC_MSG("Failed to obtain enumerated physical devices", code));
+			throw std::runtime_error(UTIL_EXC_MSG_EX("Failed to obtain enumerated physical devices", code));
 		}
 	}
 	else {
-		throw std::runtime_error(VK_APP_EXC_MSG("No physical devices found", code));
+		throw std::runtime_error(UTIL_EXC_MSG_EX("No physical devices found", code));
 	}
 	
 	// Find desired queue family (index)
@@ -83,7 +83,7 @@ VulkanApp::CVulkanCore::CVulkanCore(const std::string& applicationName) : m_appl
 	});
 
 	if (indexItr == queueFamilies.cend()) {
-		throw std::runtime_error(VK_APP_EXC_MSG("Selected physical device does not support presentation", code));
+		throw std::runtime_error(UTIL_EXC_MSG_EX("Selected physical device does not support presentation", code));
 	}
 
 	uint32_t m_queueFamilyIndex = *indexItr;
@@ -97,14 +97,14 @@ VulkanApp::CVulkanCore::CVulkanCore(const std::string& applicationName) : m_appl
 	queueCI.pQueuePriorities = &priority;
 
 	// Create logical device
-	if (code = CreateVkLogicalDevice(&queueCI)) {
-		throw std::runtime_error(VK_APP_EXC_MSG("Failed to create a Vulkan logical device", code));
+	if (code = InitVkLogicalDevice(&queueCI)) {
+		throw std::runtime_error(UTIL_EXC_MSG_EX("Failed to create a Vulkan logical device", code));
 	}
 
 	// Get command queue
 	vkGetDeviceQueue(m_vkLogicalDevice, m_queueFamilyIndex, 0, &m_vkQueue);
 	if (m_vkQueue == VK_NULL_HANDLE) {
-		throw std::runtime_error(VK_APP_EXC_MSG("Cannot retrieve the command queue", code));
+		throw std::runtime_error(UTIL_EXC_MSG_EX("Cannot retrieve the command queue", code));
 	}
 
 }
@@ -142,7 +142,31 @@ static bool IsLayerAvailable(const std::string_view layerName) {
 	return itr != layers.cend();
 }
 
-VkResult VulkanApp::CVulkanCore::CreateVkInstance() noexcept {
+bool VulkanApp::CVulkanCore::RegisterManagedSwapchain(CVulkanSwapchain *const pManagedSwapchain) {
+	// Verify if this object is a parent of a swapchain object
+	// If yes, then register it
+	if (pManagedSwapchain && pManagedSwapchain->GetParent() == this) {
+		auto itr = std::find(m_pOwnedSwapchains.cbegin(), m_pOwnedSwapchains.cend(), pManagedSwapchain);
+		if (itr != m_pOwnedSwapchains.cend()) {
+			m_pOwnedSwapchains.push_back(pManagedSwapchain);
+			return true;
+		}	
+	}
+	return false;
+}
+
+bool VulkanApp::CVulkanCore::UnregisterManagedSwapchain(CVulkanSwapchain* const pManagedSwapchain) {
+	if (pManagedSwapchain) {
+		auto itr = std::find(m_pOwnedSwapchains.begin(), m_pOwnedSwapchains.end(), pManagedSwapchain);
+		if (itr != m_pOwnedSwapchains.end()) {
+			*itr = nullptr;
+			return true;
+		}
+	}
+	return false;
+}
+
+VkResult VulkanApp::CVulkanCore::InitVkInstance() noexcept {
 
 	// Fill Vulkan application descriptor
 	VkApplicationInfo vkAppInfo = {};
@@ -180,7 +204,7 @@ VkResult VulkanApp::CVulkanCore::CreateVkInstance() noexcept {
 	return vkCreateInstance(&instanceInfo, nullptr, &m_vkInstance);		
 }
 
-VkResult VulkanApp::CVulkanCore::CreateVkLogicalDevice(const VkDeviceQueueCreateInfo *const queueCI) noexcept
+VkResult VulkanApp::CVulkanCore::InitVkLogicalDevice(const VkDeviceQueueCreateInfo *const queueCI) noexcept
 {
 	// Select required device features
 	VkPhysicalDeviceFeatures features = {};
@@ -197,22 +221,4 @@ VkResult VulkanApp::CVulkanCore::CreateVkLogicalDevice(const VkDeviceQueueCreate
 
 	// Create logical device itself
 	return vkCreateDevice(m_vkPhysicalDevices, &deviceInfo, nullptr, &m_vkLogicalDevice);
-}
-
-std::string VulkanApp::CreateExceptionMessage(const std::string msg, VkResult code, const std::string file, uint32_t line) {
-
-	auto ritr = file.rbegin();
-	while (*(++ritr) != '\\');
-
-	std::string fileTruncated;
-	if(ritr.base() != file.begin())
-		std::copy(ritr.base(), file.cend(), std::back_inserter(fileTruncated));
-
-	std::stringstream stream;
-	stream << "[EXCEPTION MESSAGE] " << msg << "\n";
-	stream << "[VKRESULT] " << string_VkResult(code) << "\n";
-	stream << "[FILE] " << fileTruncated << "\n";
-	stream << "[LINE] " << std::to_string(line) << "\n";
-
-	return stream.str();
 }
