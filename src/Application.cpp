@@ -346,18 +346,19 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 }
 
 VulkanApp::Application::~Application() {
-	
+	// Cleanup created Vulkan resources
+	vkDeviceWaitIdle(m_vkCore.GetVkLogicalDevice());
 	vkDestroySemaphore(m_vkCore.GetVkLogicalDevice(), m_imageAvailableSem, nullptr);
 	vkDestroySemaphore(m_vkCore.GetVkLogicalDevice(), m_renderFinishedSem, nullptr);
 	vkDestroyFence(m_vkCore.GetVkLogicalDevice(), m_inFlightFence, nullptr);
-
 	vkDestroyCommandPool(m_vkCore.GetVkLogicalDevice(), m_gfxCommandPool, nullptr);
 
 	for (auto& renderer : m_renderers) {
 		delete renderer;
 	}
 
-	// Cleanup created Vulkan resources
+	delete m_vkSwapchain;
+
 	vkDestroySurfaceKHR(m_vkCore.GetVkInstance(), m_vkSurface, nullptr);
 }
 
