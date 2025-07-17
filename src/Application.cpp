@@ -1,6 +1,7 @@
 #include <Application.h>
 #include <Renderer.h>
 #include <CVulkanSwapchain.h>
+#include <Utilities.h>
 
 #include <Windows.h>
 #include <iostream>
@@ -413,8 +414,6 @@ void VulkanApp::Application::Run() {
 		}
 		RenderFrame();
 	}
-
-	vkDeviceWaitIdle(m_vkCore.GetVkLogicalDevice());
 }
 
 void VulkanApp::Application::RenderFrame() {
@@ -423,7 +422,17 @@ void VulkanApp::Application::RenderFrame() {
 	vkResetFences(m_vkCore.GetVkLogicalDevice(), 1u, &m_inFlightFence);
 
 	uint32_t imgIndex = 0u;
-	vkAcquireNextImageKHR(m_vkCore.GetVkLogicalDevice(), m_vkSwapchain->GetSwapchain(), UINT64_MAX, m_imageAvailableSem, NULL, &imgIndex);
+	VkResult result = vkAcquireNextImageKHR(
+		m_vkCore.GetVkLogicalDevice(), 
+		m_vkSwapchain->GetSwapchain(),
+		UINT64_MAX,
+		m_imageAvailableSem,
+		NULL,
+		&imgIndex);
+
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error(UTIL_EXC_MSG_EX("Cannot acquire a swapchain image", result));
+	}
 
 	vkResetCommandBuffer(m_gfxCommandBuffer, 0);
 	RecordCommandBuffer(m_gfxCommandBuffer, imgIndex);
@@ -441,8 +450,9 @@ void VulkanApp::Application::RenderFrame() {
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = &m_renderFinishedSem;
 
-	if (vkQueueSubmit(m_vkCore.m_vkQueue, 1, &submitInfo, m_inFlightFence) != VK_SUCCESS) {
-		throw std::runtime_error("[Runtime error] Failed to submit draw command buffer!");
+	result = vkQueueSubmit(m_vkCore.m_vkQueue, 1, &submitInfo, m_inFlightFence);
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error(UTIL_EXC_MSG_EX("Queue submit failed", result));
 	}
 
 	VkPresentInfoKHR presentInfo{};
@@ -458,6 +468,9 @@ void VulkanApp::Application::RenderFrame() {
 
 	presentInfo.pResults = nullptr; // Optional
 
-	vkQueuePresentKHR(m_vkCore.m_vkQueue, &presentInfo);
+	result = vkQueuePresentKHR(m_vkCore.m_vkQueue, &presentInfo);
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error(UTIL_EXC_MSG_EX("Frame presentation failed", result));
+	}
 
 }
