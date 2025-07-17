@@ -28,6 +28,7 @@ namespace VulkanApp {
 
 		CVulkanCore m_vkCore;
 		CVulkanSwapchain *m_vkSwapchain = nullptr;
+		Renderer* m_renderer = nullptr;
 
 		// Window Manager - Win32 window system adapter class
 		void* m_mainWindowHandle = nullptr;
@@ -43,8 +44,5 @@ namespace VulkanApp {
 		VkSemaphore m_imageAvailableSem = VK_NULL_HANDLE;
 		VkSemaphore m_renderFinishedSem = VK_NULL_HANDLE;
 		VkFence m_inFlightFence = VK_NULL_HANDLE;
-
-		std::vector<Renderer*> m_renderers;
-
 	};
 }

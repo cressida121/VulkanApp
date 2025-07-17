@@ -6,7 +6,8 @@
 #include <fstream>
 
 
-VulkanApp::Renderer::Renderer(Application* parent, const uint32_t renderAreaWidth, const uint32_t renderAreaHeight) : m_parent(parent){
+VulkanApp::Renderer::Renderer(Application* parent, const uint32_t viewportWidth, const uint32_t viewportHeight)
+	: m_parent(parent),m_viewportWidth(viewportWidth), m_viewportHeight(viewportHeight) {
 
 	// Initialize shaders
 
@@ -89,15 +90,15 @@ VulkanApp::Renderer::Renderer(Application* parent, const uint32_t renderAreaWidt
 	VkViewport viewport = {};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
-	viewport.width = static_cast<float>(renderAreaWidth);
-	viewport.height = static_cast<float>(renderAreaHeight);
+	viewport.width = m_viewportWidth;
+	viewport.height = m_viewportHeight;
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
 
 	VkRect2D scissor = {};
 	scissor.offset = { 0,0 };
-	scissor.extent.width = renderAreaWidth;
-	scissor.extent.height = renderAreaHeight;
+	scissor.extent.width = m_viewportWidth;
+	scissor.extent.height = m_viewportHeight;
 
 	VkPipelineViewportStateCreateInfo viewportStateCI = {};
 	viewportStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -177,31 +178,6 @@ VulkanApp::Renderer::Renderer(Application* parent, const uint32_t renderAreaWidt
 	if (vkCreateGraphicsPipelines(m_parent->m_vkCore.GetVkLogicalDevice(), VK_NULL_HANDLE, 1, &pipelineCI, nullptr, &m_vkPipeline) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] Failed to create pipeline");
 	}
-
-	// Create framebuffers
-	CVulkanSwapchain *pSwapchain = m_parent->m_vkSwapchain;
-
-	m_vkFramebuffers.resize(pSwapchain->GetImageViews().size());
-	uint32_t i = 0;
-
-	for (auto scImageView : pSwapchain->GetImageViews()) {
-
-		VkFramebufferCreateInfo framebufferCI = {};
-		framebufferCI.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		framebufferCI.attachmentCount = 1;
-		framebufferCI.pAttachments = &scImageView;
-		framebufferCI.renderPass = m_vkRenderPass;
-		framebufferCI.width = renderAreaWidth;
-		framebufferCI.height = renderAreaHeight;
-		framebufferCI.layers = 1;
-
-		if (vkCreateFramebuffer(m_parent->m_vkCore.GetVkLogicalDevice(), &framebufferCI, nullptr, &m_vkFramebuffers[i++]) != VK_SUCCESS) {
-			throw std::runtime_error("[Runtime error] Failed to create framebuffer");
-		}
-
-	}
-
-	m_parent->m_renderers.push_back(this);
 }
 
 VulkanApp::Renderer::~Renderer() {
@@ -230,6 +206,32 @@ VkFramebuffer VulkanApp::Renderer::GetFramebuffer(uint32_t index) const {
 
 VkPipeline VulkanApp::Renderer::GetPipeline() const {
 	return m_vkPipeline;
+}
+
+void VulkanApp::Renderer::SetupFramebuffers(std::vector<VkImageView> renderTargets) {
+
+	for (auto& fbuff : m_vkFramebuffers) {
+		vkDestroyFramebuffer(m_parent->m_vkCore.GetVkLogicalDevice(), fbuff, nullptr);
+	}
+	
+	m_vkFramebuffers.resize(renderTargets.size());
+	uint32_t i = 0;
+
+	for (auto renderTarget : renderTargets) {
+
+		VkFramebufferCreateInfo framebufferCI = {};
+		framebufferCI.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferCI.attachmentCount = 1;
+		framebufferCI.pAttachments = &renderTarget;
+		framebufferCI.renderPass = m_vkRenderPass;
+		framebufferCI.width = m_viewportWidth;
+		framebufferCI.height = m_viewportHeight;
+		framebufferCI.layers = 1;
+
+		if (vkCreateFramebuffer(m_parent->m_vkCore.GetVkLogicalDevice(), &framebufferCI, nullptr, &m_vkFramebuffers[i++]) != VK_SUCCESS) {
+			throw std::runtime_error("[Runtime error] Failed to create framebuffer");
+		}
+	}
 }
 
 VkShaderModule VulkanApp::Renderer::LoadCompiledShader(const std::string& filePath) {

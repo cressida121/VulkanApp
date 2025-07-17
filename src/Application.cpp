@@ -305,7 +305,8 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	
 	m_vkSwapchain = new CVulkanSwapchain(&m_vkCore, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat);
 
-	new Renderer(this, capabilities.currentExtent.width, capabilities.currentExtent.height);
+	m_renderer = new Renderer(this, capabilities.currentExtent.width, capabilities.currentExtent.height);
+	m_renderer->SetupFramebuffers(m_vkSwapchain->GetImageViews());
 
 	// Create command pool
 	std::optional<uint32_t> qfIndex = getQueueFamilies(m_vkCore.GetVkPhysicalDevice(), VK_QUEUE_GRAPHICS_BIT);
@@ -353,20 +354,13 @@ VulkanApp::Application::~Application() {
 	vkDestroySemaphore(m_vkCore.GetVkLogicalDevice(), m_renderFinishedSem, nullptr);
 	vkDestroyFence(m_vkCore.GetVkLogicalDevice(), m_inFlightFence, nullptr);
 	vkDestroyCommandPool(m_vkCore.GetVkLogicalDevice(), m_gfxCommandPool, nullptr);
-
-	for (auto& renderer : m_renderers) {
-		delete renderer;
-	}
-
+	delete m_renderer;
 	delete m_vkSwapchain;
-
 	vkDestroySurfaceKHR(m_vkCore.GetVkInstance(), m_vkSurface, nullptr);
 }
 
 bool VulkanApp::Application::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, uint32_t rendererIndex) {
 	
-	if (rendererIndex < 0 || rendererIndex >= m_renderers.size())
-		return false;
 
 	VkCommandBufferBeginInfo beginInfoCI = {};
 	beginInfoCI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -379,8 +373,8 @@ bool VulkanApp::Application::RecordCommandBuffer(VkCommandBuffer commandBuffer, 
 
 	VkRenderPassBeginInfo renderPassCI = {};
 	renderPassCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassCI.renderPass = m_renderers.at(rendererIndex)->GetRenderPass();
-	renderPassCI.framebuffer = m_renderers.at(rendererIndex)->GetFramebuffer(imageIndex);
+	renderPassCI.renderPass = m_renderer->GetRenderPass();
+	renderPassCI.framebuffer = m_renderer->GetFramebuffer(imageIndex);
 	renderPassCI.renderArea.offset = { 0, 0 };
 	renderPassCI.renderArea.extent = m_surfaceExtent;
 
@@ -389,7 +383,7 @@ bool VulkanApp::Application::RecordCommandBuffer(VkCommandBuffer commandBuffer, 
 	renderPassCI.pClearValues = &clearColor;
 
 	vkCmdBeginRenderPass(commandBuffer, &renderPassCI, VK_SUBPASS_CONTENTS_INLINE);
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_renderers.at(rendererIndex)->GetPipeline());
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_renderer->GetPipeline());
 	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 	vkCmdEndRenderPass(commandBuffer);
 
