@@ -1,6 +1,7 @@
 #include "Renderer.h"
 #include "Application.h"
 #include <CVulkanSwapchain.h>
+#include <Local.h>
 
 #include <stdexcept>
 #include <fstream>
@@ -10,9 +11,8 @@ VulkanApp::Renderer::Renderer(Application* parent, const uint32_t viewportWidth,
 	: m_parent(parent),m_viewportWidth(viewportWidth), m_viewportHeight(viewportHeight) {
 
 	// Initialize shaders
-
-	m_vertexShaderModule = LoadCompiledShader("C:\\Users\\patry\\source\\repos\\VulkanApp\\shaders\\compiled\\VertexShader.spv");
-	m_fragmentShaderModule = LoadCompiledShader("C:\\Users\\patry\\source\\repos\\VulkanApp\\shaders\\compiled\\FragmentShader.spv");
+	m_vertexShaderModule = LoadCompiledShader(VERTEX_SHADER_PATH);
+	m_fragmentShaderModule = LoadCompiledShader(FRAGMENT_SHADER_PATH);
 
 	VkPipelineShaderStageCreateInfo vertexShaderCI = {};
 	vertexShaderCI.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
