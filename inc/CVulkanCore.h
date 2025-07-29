@@ -15,8 +15,6 @@ namespace VulkanApp {
 		const VkInstance GetVkInstance() const { return m_vkInstance; };
 		const VkDevice GetVkLogicalDevice() const { return m_vkLogicalDevice; };
 		const VkPhysicalDevice GetVkPhysicalDevice() const { return m_vkPhysicalDevices; };
-		bool RegisterManagedSwapchain(CVulkanSwapchain *const pManagedSwapchain);
-		bool UnregisterManagedSwapchain(CVulkanSwapchain *const pManagedSwapchain);
 
 		VkQueue m_vkQueue = VK_NULL_HANDLE; // To be removed
 
@@ -30,9 +28,6 @@ namespace VulkanApp {
 		uint32_t m_physicalDevicesCount = 0u;
 		VkDevice m_vkLogicalDevice = VK_NULL_HANDLE;
 		uint32_t m_queueFamilyIndex = 0u;
-
-		std::vector<CVulkanSwapchain*> m_pOwnedSwapchains;
-
 	};
 
 }

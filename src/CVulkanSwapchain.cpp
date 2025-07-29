@@ -141,15 +141,10 @@ VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 		}
 
 	}
-
-	m_pParent->RegisterManagedSwapchain(this);
 }
 
 VulkanApp::CVulkanSwapchain::~CVulkanSwapchain() {
 	
-	// Unregister from parent object
-	m_pParent->UnregisterManagedSwapchain(this);
-
 	for (auto imageView : m_swapchainImageViews) {
 		if (imageView) {
 			vkDestroyImageView(m_pParent->GetVkLogicalDevice(), imageView, nullptr);

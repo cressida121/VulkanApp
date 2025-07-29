@@ -111,13 +111,6 @@ VulkanApp::CVulkanCore::CVulkanCore(const std::string& applicationName) : m_appl
 
 VulkanApp::CVulkanCore::~CVulkanCore() {
 
-	// Delete all created swapchains
-	for (auto pSwapchain : m_pOwnedSwapchains) {
-		if (pSwapchain) {
-			delete pSwapchain;
-		}
-	}
-
 	if (m_vkLogicalDevice)
 		vkDestroyDevice(m_vkLogicalDevice, nullptr);
 		
@@ -140,30 +133,6 @@ static bool IsLayerAvailable(const std::string_view layerName) {
 	auto itr = std::find(layers.cbegin(), layers.cend(), layerName);
 	
 	return itr != layers.cend();
-}
-
-bool VulkanApp::CVulkanCore::RegisterManagedSwapchain(CVulkanSwapchain *const pManagedSwapchain) {
-	// Verify if this object is a parent of a swapchain object
-	// If yes, then register it
-	if (pManagedSwapchain && pManagedSwapchain->GetParent() == this) {
-		auto itr = std::find(m_pOwnedSwapchains.cbegin(), m_pOwnedSwapchains.cend(), pManagedSwapchain);
-		if (itr != m_pOwnedSwapchains.cend()) {
-			m_pOwnedSwapchains.push_back(pManagedSwapchain);
-			return true;
-		}	
-	}
-	return false;
-}
-
-bool VulkanApp::CVulkanCore::UnregisterManagedSwapchain(CVulkanSwapchain* const pManagedSwapchain) {
-	if (pManagedSwapchain) {
-		auto itr = std::find(m_pOwnedSwapchains.begin(), m_pOwnedSwapchains.end(), pManagedSwapchain);
-		if (itr != m_pOwnedSwapchains.end()) {
-			*itr = nullptr;
-			return true;
-		}
-	}
-	return false;
 }
 
 VkResult VulkanApp::CVulkanCore::InitVkInstance() noexcept {
