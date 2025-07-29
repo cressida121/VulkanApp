@@ -5,10 +5,11 @@
 
 #include <stdexcept>
 #include <fstream>
+#include "CVulkanPass.h"
 
 
 VulkanApp::Renderer::Renderer(Application* parent, const uint32_t viewportWidth, const uint32_t viewportHeight)
-	: m_parent(parent),m_viewportWidth(viewportWidth), m_viewportHeight(viewportHeight) {
+	: m_parent(parent) {
 
 	// Initialize shaders
 	m_vertexShaderModule = LoadCompiledShader(VERTEX_SHADER_PATH);
@@ -90,15 +91,15 @@ VulkanApp::Renderer::Renderer(Application* parent, const uint32_t viewportWidth,
 	VkViewport viewport = {};
 	viewport.x = 0.0f;
 	viewport.y = 0.0f;
-	viewport.width = m_viewportWidth;
-	viewport.height = m_viewportHeight;
+	viewport.width = viewportWidth;
+	viewport.height = viewportHeight;
 	viewport.minDepth = 0.0f;
 	viewport.maxDepth = 1.0f;
 
 	VkRect2D scissor = {};
 	scissor.offset = { 0,0 };
-	scissor.extent.width = m_viewportWidth;
-	scissor.extent.height = m_viewportHeight;
+	scissor.extent.width = viewportWidth;
+	scissor.extent.height = viewportHeight;
 
 	VkPipelineViewportStateCreateInfo viewportStateCI = {};
 	viewportStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -208,24 +209,24 @@ VkPipeline VulkanApp::Renderer::GetPipeline() const {
 	return m_vkPipeline;
 }
 
-void VulkanApp::Renderer::SetupFramebuffers(std::vector<VkImageView> renderTargets) {
+void VulkanApp::Renderer::SetupFramebuffers(std::vector<VkImageView> imageViews, const uint32_t fbWidth, const uint32_t fbHeight) {
 
 	for (auto& fbuff : m_vkFramebuffers) {
 		vkDestroyFramebuffer(m_parent->m_vkCore.GetVkLogicalDevice(), fbuff, nullptr);
 	}
 	
-	m_vkFramebuffers.resize(renderTargets.size());
+	m_vkFramebuffers.resize(imageViews.size());
 	uint32_t i = 0;
 
-	for (auto renderTarget : renderTargets) {
+	for (auto imageView : imageViews) {
 
 		VkFramebufferCreateInfo framebufferCI = {};
 		framebufferCI.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		framebufferCI.attachmentCount = 1;
-		framebufferCI.pAttachments = &renderTarget;
+		framebufferCI.pAttachments = &imageView;
 		framebufferCI.renderPass = m_vkRenderPass;
-		framebufferCI.width = m_viewportWidth;
-		framebufferCI.height = m_viewportHeight;
+		framebufferCI.width = fbWidth;
+		framebufferCI.height = fbHeight;
 		framebufferCI.layers = 1;
 
 		if (vkCreateFramebuffer(m_parent->m_vkCore.GetVkLogicalDevice(), &framebufferCI, nullptr, &m_vkFramebuffers[i++]) != VK_SUCCESS) {

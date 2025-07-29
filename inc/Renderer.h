@@ -15,7 +15,7 @@ namespace VulkanApp {
 		VkRenderPass GetRenderPass() const;
 		VkFramebuffer GetFramebuffer(uint32_t index) const;
 		VkPipeline GetPipeline() const;
-		void SetupFramebuffers(std::vector<VkImageView> renderTargets);
+		void SetupFramebuffers(std::vector<VkImageView> imageViews, const uint32_t fbWidth, const uint32_t fbHeight);
 
 	private:
 		VkShaderModule LoadCompiledShader(const std::string& filePath);
@@ -27,8 +27,5 @@ namespace VulkanApp {
 		VkPipelineLayout m_vkPipelineLayout = VK_NULL_HANDLE;
 		VkPipeline m_vkPipeline = VK_NULL_HANDLE;
 		std::vector<VkFramebuffer> m_vkFramebuffers;
-
-		float m_viewportWidth = 0.f;
-		float m_viewportHeight = 0.f;
 	};
 }

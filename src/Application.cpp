@@ -306,7 +306,7 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	m_vkSwapchain = new CVulkanSwapchain(&m_vkCore, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat);
 
 	m_renderer = new Renderer(this, capabilities.currentExtent.width, capabilities.currentExtent.height);
-	m_renderer->SetupFramebuffers(m_vkSwapchain->GetImageViews());
+	m_renderer->SetupFramebuffers(m_vkSwapchain->GetImageViews(), capabilities.currentExtent.width, capabilities.currentExtent.height);
 
 	// Create command pool
 	std::optional<uint32_t> qfIndex = getQueueFamilies(m_vkCore.GetVkPhysicalDevice(), VK_QUEUE_GRAPHICS_BIT);
@@ -354,8 +354,14 @@ VulkanApp::Application::~Application() {
 	vkDestroySemaphore(m_vkCore.GetVkLogicalDevice(), m_renderFinishedSem, nullptr);
 	vkDestroyFence(m_vkCore.GetVkLogicalDevice(), m_inFlightFence, nullptr);
 	vkDestroyCommandPool(m_vkCore.GetVkLogicalDevice(), m_gfxCommandPool, nullptr);
-	delete m_renderer;
-	delete m_vkSwapchain;
+
+	if (m_renderer) {
+		delete m_renderer;
+	}
+	if (m_vkSwapchain) {
+		delete m_vkSwapchain;
+	}
+
 	vkDestroySurfaceKHR(m_vkCore.GetVkInstance(), m_vkSurface, nullptr);
 }
 
@@ -463,7 +469,25 @@ void VulkanApp::Application::RenderFrame() {
 	presentInfo.pResults = nullptr; // Optional
 
 	result = vkQueuePresentKHR(m_vkCore.m_vkQueue, &presentInfo);
-	if (result != VK_SUCCESS) {
+
+	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+		vkDeviceWaitIdle(m_vkCore.GetVkLogicalDevice());
+		
+		delete m_vkSwapchain;
+		
+		VkSurfaceCapabilitiesKHR capabilities;
+		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vkCore.GetVkPhysicalDevice(), m_vkSurface, &capabilities);
+
+		m_surfaceExtent = capabilities.currentExtent;
+		m_vkSurfaceFormat.format = VkFormat::VK_FORMAT_B8G8R8A8_SRGB;
+		m_vkSurfaceFormat.colorSpace = VkColorSpaceKHR::VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+
+		m_vkSwapchain = new CVulkanSwapchain(&m_vkCore, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat);
+
+		m_renderer = new Renderer(this, capabilities.currentExtent.width, capabilities.currentExtent.height);
+		m_renderer->SetupFramebuffers(m_vkSwapchain->GetImageViews(), capabilities.currentExtent.width, capabilities.currentExtent.height);
+
+	} else if (result != VK_SUCCESS) {
 		throw std::runtime_error(UTIL_EXC_MSG_EX("Frame presentation failed", result));
 	}
 
