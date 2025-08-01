@@ -21,7 +21,7 @@ namespace VulkanApp {
 		VkSwapchainKHR m_vkSwapchain = VK_NULL_HANDLE;
 		std::vector<VkImage> m_swapchainImages;
 		std::vector<VkImageView> m_swapchainImageViews;
-
+		// Move framebuffer here
 	};
 
 

@@ -484,7 +484,6 @@ void VulkanApp::Application::RenderFrame() {
 
 		m_vkSwapchain = new CVulkanSwapchain(&m_vkCore, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat);
 
-		m_renderer = new Renderer(this, capabilities.currentExtent.width, capabilities.currentExtent.height);
 		m_renderer->SetupFramebuffers(m_vkSwapchain->GetImageViews(), capabilities.currentExtent.width, capabilities.currentExtent.height);
 
 	} else if (result != VK_SUCCESS) {
