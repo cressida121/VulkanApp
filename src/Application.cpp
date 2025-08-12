@@ -303,10 +303,10 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	m_vkSurfaceFormat.format = VkFormat::VK_FORMAT_B8G8R8A8_SRGB;
 	m_vkSurfaceFormat.colorSpace = VkColorSpaceKHR::VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 	
-	m_vkSwapchain = new CVulkanSwapchain(&m_vkCore, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat);
-
 	m_renderer = new Renderer(this, capabilities.currentExtent.width, capabilities.currentExtent.height);
-	m_renderer->SetupFramebuffers(m_vkSwapchain->GetImageViews(), capabilities.currentExtent.width, capabilities.currentExtent.height);
+	m_vkSwapchain = new CVulkanSwapchain(&m_vkCore, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat, m_renderer->GetRenderPass());
+
+	//m_renderer->SetupFramebuffers(m_vkSwapchain->GetImageViews(), capabilities.currentExtent.width, capabilities.currentExtent.height);
 
 	// Create command pool
 	std::optional<uint32_t> qfIndex = getQueueFamilies(m_vkCore.GetVkPhysicalDevice(), VK_QUEUE_GRAPHICS_BIT);
@@ -380,7 +380,7 @@ bool VulkanApp::Application::RecordCommandBuffer(VkCommandBuffer commandBuffer, 
 	VkRenderPassBeginInfo renderPassCI = {};
 	renderPassCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassCI.renderPass = m_renderer->GetRenderPass();
-	renderPassCI.framebuffer = m_renderer->GetFramebuffer(imageIndex);
+	renderPassCI.framebuffer = m_vkSwapchain->GetFramebuffer(imageIndex);
 	renderPassCI.renderArea.offset = { 0, 0 };
 	renderPassCI.renderArea.extent = m_surfaceExtent;
 
@@ -406,17 +406,16 @@ void VulkanApp::Application::Run() {
 	ShowWindow(static_cast<HWND>(m_mainWindowHandle), SW_SHOW);
 
 	MSG msg = { 0 };
-
-	while (msg.message != WM_QUIT) {
+	do {
 		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
-		RenderFrame();
-	}
+	} while (RenderFrame());
+
 }
 
-void VulkanApp::Application::RenderFrame() {
+bool VulkanApp::Application::RenderFrame() {
 	
 	vkWaitForFences(m_vkCore.GetVkLogicalDevice(), 1u, &m_inFlightFence, VK_TRUE, UINT64_MAX);
 	vkResetFences(m_vkCore.GetVkLogicalDevice(), 1u, &m_inFlightFence);
@@ -474,20 +473,27 @@ void VulkanApp::Application::RenderFrame() {
 		vkDeviceWaitIdle(m_vkCore.GetVkLogicalDevice());
 		
 		delete m_vkSwapchain;
+		m_vkSwapchain = nullptr;
 		
 		VkSurfaceCapabilitiesKHR capabilities;
-		vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vkCore.GetVkPhysicalDevice(), m_vkSurface, &capabilities);
+		result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vkCore.GetVkPhysicalDevice(), m_vkSurface, &capabilities);
 
-		m_surfaceExtent = capabilities.currentExtent;
-		m_vkSurfaceFormat.format = VkFormat::VK_FORMAT_B8G8R8A8_SRGB;
-		m_vkSurfaceFormat.colorSpace = VkColorSpaceKHR::VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+		if (result == VK_SUCCESS) {
+			m_surfaceExtent = capabilities.currentExtent;
+			m_vkSurfaceFormat.format = VkFormat::VK_FORMAT_B8G8R8A8_SRGB;
+			m_vkSurfaceFormat.colorSpace = VkColorSpaceKHR::VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
-		m_vkSwapchain = new CVulkanSwapchain(&m_vkCore, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat);
-
-		m_renderer->SetupFramebuffers(m_vkSwapchain->GetImageViews(), capabilities.currentExtent.width, capabilities.currentExtent.height);
+			m_vkSwapchain = new CVulkanSwapchain(&m_vkCore, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat, m_renderer->GetRenderPass());
+		}
+		else if (result == VK_ERROR_SURFACE_LOST_KHR) {
+			return false; // The surface has been destroyed, stop rendering
+		}
+		else {
+			throw std::runtime_error(UTIL_EXC_MSG_EX("Swapchain recreation failure", result));
+		}
 
 	} else if (result != VK_SUCCESS) {
 		throw std::runtime_error(UTIL_EXC_MSG_EX("Frame presentation failed", result));
 	}
-
+	return true;
 }
