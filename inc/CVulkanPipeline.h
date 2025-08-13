@@ -34,7 +34,6 @@ namespace VulkanApp {
 	private:
 		void Release();
 
-		VkPipelineLayout m_vkPipelineLayout = VK_NULL_HANDLE;
 		VkPipeline m_vkPipeline = VK_NULL_HANDLE;
 		const CVulkanCore *const m_pCore = nullptr;
 	};

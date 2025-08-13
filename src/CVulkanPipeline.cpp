@@ -6,7 +6,12 @@
 #include <stdexcept>
 #include <fstream>
 
-VulkanApp::CVulkanPipeline::CVulkanPipeline(const CVulkanCore *const pCore, const CVulkanPass *const pPass, const uint32_t vpWidth, const uint32_t vpHeight, const VkPipelineShaderStageCreateInfo *const shaderStages)
+VulkanApp::CVulkanPipeline::CVulkanPipeline(
+	const CVulkanCore *const pCore,
+	const CVulkanPass *const pPass,
+	const uint32_t vpWidth,
+	const uint32_t vpHeight,
+	const VkPipelineShaderStageCreateInfo *const shaderStages)
 	: m_pCore(pCore)
 {
 	// Initialize descriptors with deafult values
@@ -86,7 +91,6 @@ VulkanApp::CVulkanPipeline::CVulkanPipeline(const CVulkanCore *const pCore, cons
 	m_pipelineCI.pMultisampleState = &m_multisamplingStateCI;
 	m_pipelineCI.pDepthStencilState = nullptr;
 	m_pipelineCI.pColorBlendState = &m_colorBlendingCI;
-	m_pipelineCI.layout = m_vkPipelineLayout;
 	m_pipelineCI.renderPass = pPass->GetHandle();
 	m_pipelineCI.subpass = 0;
 	m_pipelineCI.basePipelineHandle = VK_NULL_HANDLE;
@@ -100,7 +104,7 @@ void VulkanApp::CVulkanPipeline::Initialize() {
 	
 	Release();
 
-	VkResult result = vkCreatePipelineLayout(m_pCore->GetVkLogicalDevice(), &m_pipelineLayoutCI, nullptr, &m_vkPipelineLayout);
+	VkResult result = vkCreatePipelineLayout(m_pCore->GetVkLogicalDevice(), &m_pipelineLayoutCI, nullptr, &m_pipelineCI.layout);
 
 	if (result != VK_SUCCESS) {
 		throw std::runtime_error(UTIL_EXC_MSG_EX("Cannot create pipeline layout", result));
@@ -149,9 +153,9 @@ void VulkanApp::CVulkanPipeline::Release() {
 		m_vkPipeline = VK_NULL_HANDLE;
 	}
 
-	if (m_vkPipelineLayout != VK_NULL_HANDLE) {
-		vkDestroyPipelineLayout(m_pCore->GetVkLogicalDevice(), m_vkPipelineLayout, nullptr);
-		m_vkPipelineLayout = VK_NULL_HANDLE;
+	if (m_pipelineCI.layout != VK_NULL_HANDLE) {
+		vkDestroyPipelineLayout(m_pCore->GetVkLogicalDevice(), m_pipelineCI.layout, nullptr);
+		m_pipelineCI.layout = VK_NULL_HANDLE;
 	}
 
 }
