@@ -4,9 +4,10 @@
 #include <Utilities.h>
 
 #include <stdexcept>
+#include <fstream>
 
-VulkanApp::CVulkanPipeline::CVulkanPipeline(CVulkanCore* pParent, CVulkanPass* pPass, const uint32_t vpWidth, const uint32_t vpHeight, VkPipelineShaderStageCreateInfo* shaderStages)
-	: m_pCore(pParent)
+VulkanApp::CVulkanPipeline::CVulkanPipeline(const CVulkanCore *const pCore, const CVulkanPass *const pPass, const uint32_t vpWidth, const uint32_t vpHeight, const VkPipelineShaderStageCreateInfo *const shaderStages)
+	: m_pCore(pCore)
 {
 	// Initialize descriptors with deafult values
 	m_vertexInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -86,7 +87,7 @@ VulkanApp::CVulkanPipeline::CVulkanPipeline(CVulkanCore* pParent, CVulkanPass* p
 	m_pipelineCI.pDepthStencilState = nullptr;
 	m_pipelineCI.pColorBlendState = &m_colorBlendingCI;
 	m_pipelineCI.layout = m_vkPipelineLayout;
-	m_pipelineCI.renderPass = pPass->GetRenderPass();
+	m_pipelineCI.renderPass = pPass->GetHandle();
 	m_pipelineCI.subpass = 0;
 	m_pipelineCI.basePipelineHandle = VK_NULL_HANDLE;
 	m_pipelineCI.basePipelineIndex = -1;
@@ -111,6 +112,32 @@ void VulkanApp::CVulkanPipeline::Initialize() {
 		throw std::runtime_error(UTIL_EXC_MSG_EX("Cannot create pipeline", result));
 	}
 
+}
+
+VkShaderModule VulkanApp::CVulkanPipeline::LoadCompiledShader(const VkDevice device, const std::string& filePath) {
+	
+	std::ifstream file(filePath, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open()) {
+		throw std::runtime_error("[Runtime error] Failed to open compiled shader file");
+	}
+
+	size_t fileSize = static_cast<size_t>(file.tellg());
+	std::vector<char> buffer(fileSize);
+
+	file.seekg(0);
+	file.read(buffer.data(), fileSize);
+	file.close();
+
+	VkShaderModuleCreateInfo shaderModuleCI = {};
+	shaderModuleCI.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	shaderModuleCI.codeSize = buffer.size();
+	shaderModuleCI.pCode = reinterpret_cast<const uint32_t*>(buffer.data());
+
+	VkShaderModule shaderModule = VK_NULL_HANDLE;
+	vkCreateShaderModule(device, &shaderModuleCI, nullptr, &shaderModule);
+
+	return shaderModule;
 }
 
 void VulkanApp::CVulkanPipeline::Release() {

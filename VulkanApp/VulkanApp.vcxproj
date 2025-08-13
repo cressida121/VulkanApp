@@ -149,7 +149,6 @@
     <ClInclude Include="..\inc\CVulkanPass.h" />
     <ClInclude Include="..\inc\CVulkanPipeline.h" />
     <ClInclude Include="..\inc\CVulkanSwapchain.h" />
-    <ClInclude Include="..\inc\Renderer.h" />
     <ClInclude Include="..\inc\Utilities.h" />
   </ItemGroup>
   <ItemGroup>
@@ -159,7 +158,6 @@
     <ClCompile Include="..\src\CVulkanPipeline.cpp" />
     <ClCompile Include="..\src\CVulkanSwapchain.cpp" />
     <ClCompile Include="..\src\main.cpp" />
-    <ClCompile Include="..\src\Renderer.cpp" />
     <ClCompile Include="..\src\Utilities.cpp" />
   </ItemGroup>
   <ItemGroup>

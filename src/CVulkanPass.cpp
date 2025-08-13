@@ -3,10 +3,10 @@
 #include <Utilities.h>
 #include <fstream>
 
-VulkanApp::CVulkanPass::CVulkanPass(CVulkanCore *pParent, std::vector<VkImageView> renderTargets, const uint32_t fbWidth, const uint32_t fbHeight)
-	: m_pCore(pParent), m_fbWidth(fbWidth), m_fbHeight(fbHeight)
+VulkanApp::CVulkanPass::CVulkanPass(const CVulkanCore *const pCore, const VkFormat surfaceFormat)
+	: m_pCore(pCore)
 {
-	m_attachmentDesc.format = VkFormat::VK_FORMAT_R8G8B8_SRGB;
+	m_attachmentDesc.format = surfaceFormat;
 	m_attachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
 	m_attachmentDesc.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
 	m_attachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -38,11 +38,9 @@ VulkanApp::CVulkanPass::CVulkanPass(CVulkanCore *pParent, std::vector<VkImageVie
 	m_renderPassCI.pDependencies = &m_dependency;
 
 	Initialize();
-	SetupFramebuffers(renderTargets);
 }
 
 VulkanApp::CVulkanPass::~CVulkanPass() {
-	ReleaseFramebuffers();
 	Release();
 }
 void VulkanApp::CVulkanPass::Initialize() {
@@ -58,36 +56,5 @@ void VulkanApp::CVulkanPass::Release() {
 		m_vkRenderPass = VK_NULL_HANDLE;
 	}
 }
-void VulkanApp::CVulkanPass::SetupFramebuffers(std::vector<VkImageView> renderTargets) {
-	
-	ReleaseFramebuffers();
 
-	m_vkFramebuffers.resize(renderTargets.size());
-	uint32_t i = 0;
-
-	for (auto renderTarget : renderTargets) {
-
-		VkFramebufferCreateInfo framebufferCI = {};
-		framebufferCI.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-		framebufferCI.attachmentCount = 1;
-		framebufferCI.pAttachments = &renderTarget;
-		framebufferCI.renderPass = m_vkRenderPass;
-		framebufferCI.width = m_fbWidth;
-		framebufferCI.height = m_fbHeight;
-		framebufferCI.layers = 1;
-
-		VkResult result = vkCreateFramebuffer(m_pCore->GetVkLogicalDevice(), &framebufferCI, nullptr, &m_vkFramebuffers[i++]);
-
-		if (result != VK_SUCCESS) {
-			throw std::runtime_error(UTIL_EXC_MSG_EX("Cannot create framebuffer", result));
-		}
-	}
-}
-
-void VulkanApp::CVulkanPass::ReleaseFramebuffers() {
-	for (auto framebuffer : m_vkFramebuffers) {
-		vkDestroyFramebuffer(m_pCore->GetVkLogicalDevice(), framebuffer, nullptr);
-	}
-	m_vkFramebuffers.clear();
-}
 

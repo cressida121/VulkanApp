@@ -1,7 +1,9 @@
 #include <Application.h>
-#include <Renderer.h>
 #include <CVulkanSwapchain.h>
+#include <CVulkanPass.h>
+#include <CVulkanPipeline.h>
 #include <Utilities.h>
+#include <Local.h>
 
 #include <Windows.h>
 #include <iostream>
@@ -11,7 +13,7 @@
 #include <algorithm>
 
 
-// Vulkan information retrieval functions
+// Vulkan information retrieval functions (Information available in Vulkan Caps Viewer)
 
 std::vector<std::string> getSupportedExtenstions() {
 
@@ -282,7 +284,7 @@ HWND CreateSystemWindow(const std::wstring &name, const uint32_t windowWidth, co
 
 VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t windowHeight) 
 	:	m_mainWindowHandle(CreateSystemWindow(L"VulkanApp", windowWidth, windowHeight)),
-		m_vkCore("VulkanApp") {
+		m_core("VulkanApp") {
 
 	VkWin32SurfaceCreateInfoKHR surfaceInfo = {};
 	{
@@ -292,42 +294,53 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 		surfaceInfo.hwnd = static_cast<HWND>(m_mainWindowHandle);
 	}
 
-	if (vkCreateWin32SurfaceKHR(m_vkCore.GetVkInstance(), &surfaceInfo, nullptr, &m_vkSurface) != VK_SUCCESS) {
+	if (vkCreateWin32SurfaceKHR(m_core.GetVkInstance(), &surfaceInfo, nullptr, &m_vkSurface) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] Cannot create Win32SurfaceKHR");
 	}
 
 	VkSurfaceCapabilitiesKHR capabilities;
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vkCore.GetVkPhysicalDevice(), m_vkSurface, &capabilities);
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_core.GetVkPhysicalDevice(), m_vkSurface, &capabilities);
 
-	m_surfaceExtent = capabilities.currentExtent;
+	m_vkSurfaceExtent = capabilities.currentExtent;
 	m_vkSurfaceFormat.format = VkFormat::VK_FORMAT_B8G8R8A8_SRGB;
 	m_vkSurfaceFormat.colorSpace = VkColorSpaceKHR::VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 	
-	m_renderer = new Renderer(this, capabilities.currentExtent.width, capabilities.currentExtent.height);
-	m_vkSwapchain = new CVulkanSwapchain(&m_vkCore, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat, m_renderer->GetRenderPass());
+	m_pPass = new CVulkanPass(&m_core, m_vkSurfaceFormat.format);
+	
+	// Initialize shaders
+	m_shaderStageCI[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	m_shaderStageCI[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+	m_shaderStageCI[0].module = CVulkanPipeline::LoadCompiledShader(m_core.GetVkLogicalDevice(), VERTEX_SHADER_PATH);
+	m_shaderStageCI[0].pName = "main";
 
-	//m_renderer->SetupFramebuffers(m_vkSwapchain->GetImageViews(), capabilities.currentExtent.width, capabilities.currentExtent.height);
+	m_shaderStageCI[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	m_shaderStageCI[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	m_shaderStageCI[1].module = CVulkanPipeline::LoadCompiledShader(m_core.GetVkLogicalDevice(), FRAGMENT_SHADER_PATH);
+	m_shaderStageCI[1].pName = "main";
+	
+	m_pPipeline = new CVulkanPipeline(&m_core, m_pPass, capabilities.currentExtent.width, capabilities.currentExtent.height, m_shaderStageCI);
+	m_pSwapchain = new CVulkanSwapchain(&m_core, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat, m_pPass->GetHandle());
 
 	// Create command pool
-	std::optional<uint32_t> qfIndex = getQueueFamilies(m_vkCore.GetVkPhysicalDevice(), VK_QUEUE_GRAPHICS_BIT);
+	std::optional<uint32_t> qfIndex = getQueueFamilies(m_core.GetVkPhysicalDevice(), VK_QUEUE_GRAPHICS_BIT);
 	
 	VkCommandPoolCreateInfo commandPoolCI = {};
 	commandPoolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	commandPoolCI.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 	commandPoolCI.queueFamilyIndex = qfIndex.value();
 
-	if (vkCreateCommandPool(m_vkCore.GetVkLogicalDevice(), &commandPoolCI, nullptr, &m_gfxCommandPool) != VK_SUCCESS) {
+	if (vkCreateCommandPool(m_core.GetVkLogicalDevice(), &commandPoolCI, nullptr, &m_vkCommandPool) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] Cannot create a command pool");
 	}
 
 	// Create command buffer
 	VkCommandBufferAllocateInfo commandBufferCI = {};
 	commandBufferCI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	commandBufferCI.commandPool = m_gfxCommandPool;
+	commandBufferCI.commandPool = m_vkCommandPool;
 	commandBufferCI.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 	commandBufferCI.commandBufferCount = 1;
 
-	if (vkAllocateCommandBuffers(m_vkCore.GetVkLogicalDevice(), &commandBufferCI, &m_gfxCommandBuffer) != VK_SUCCESS) {
+	if (vkAllocateCommandBuffers(m_core.GetVkLogicalDevice(), &commandBufferCI, &m_vkCommandBuffer) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] Failed to create a command pool");
 	}
 
@@ -340,29 +353,36 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	fenceCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	fenceCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-	if (vkCreateSemaphore(m_vkCore.GetVkLogicalDevice(), &semaphoreCI, nullptr, &m_imageAvailableSem) != VK_SUCCESS ||
-		vkCreateSemaphore(m_vkCore.GetVkLogicalDevice(), &semaphoreCI, nullptr, &m_renderFinishedSem) != VK_SUCCESS ||
-		vkCreateFence(m_vkCore.GetVkLogicalDevice(), &fenceCI, nullptr, &m_inFlightFence) != VK_SUCCESS) {
+	if (vkCreateSemaphore(m_core.GetVkLogicalDevice(), &semaphoreCI, nullptr, &m_vkImgRdySem) != VK_SUCCESS ||
+		vkCreateSemaphore(m_core.GetVkLogicalDevice(), &semaphoreCI, nullptr, &m_vkRenderDoneSem) != VK_SUCCESS ||
+		vkCreateFence(m_core.GetVkLogicalDevice(), &fenceCI, nullptr, &m_vkFence) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] failed to create semaphores");
 	}
 }
 
 VulkanApp::Application::~Application() {
 	// Cleanup created Vulkan resources
-	vkDeviceWaitIdle(m_vkCore.GetVkLogicalDevice());
-	vkDestroySemaphore(m_vkCore.GetVkLogicalDevice(), m_imageAvailableSem, nullptr);
-	vkDestroySemaphore(m_vkCore.GetVkLogicalDevice(), m_renderFinishedSem, nullptr);
-	vkDestroyFence(m_vkCore.GetVkLogicalDevice(), m_inFlightFence, nullptr);
-	vkDestroyCommandPool(m_vkCore.GetVkLogicalDevice(), m_gfxCommandPool, nullptr);
+	vkDeviceWaitIdle(m_core.GetVkLogicalDevice());
+	vkDestroySemaphore(m_core.GetVkLogicalDevice(), m_vkImgRdySem, nullptr);
+	vkDestroySemaphore(m_core.GetVkLogicalDevice(), m_vkRenderDoneSem, nullptr);
+	vkDestroyFence(m_core.GetVkLogicalDevice(), m_vkFence, nullptr);
+	vkDestroyCommandPool(m_core.GetVkLogicalDevice(), m_vkCommandPool, nullptr);
 
-	if (m_renderer) {
-		delete m_renderer;
-	}
-	if (m_vkSwapchain) {
-		delete m_vkSwapchain;
+	if (m_pSwapchain) {
+		delete m_pSwapchain;
 	}
 
-	vkDestroySurfaceKHR(m_vkCore.GetVkInstance(), m_vkSurface, nullptr);
+	if (m_pPipeline) {
+		delete m_pPipeline;
+	}
+
+	if (m_pPass) {
+		delete m_pPass;
+	}
+
+	vkDestroyShaderModule(m_core.GetVkLogicalDevice(), m_shaderStageCI[0].module, nullptr);
+	vkDestroyShaderModule(m_core.GetVkLogicalDevice(), m_shaderStageCI[1].module, nullptr);
+	vkDestroySurfaceKHR(m_core.GetVkInstance(), m_vkSurface, nullptr);
 }
 
 bool VulkanApp::Application::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, uint32_t rendererIndex) {
@@ -379,17 +399,17 @@ bool VulkanApp::Application::RecordCommandBuffer(VkCommandBuffer commandBuffer, 
 
 	VkRenderPassBeginInfo renderPassCI = {};
 	renderPassCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassCI.renderPass = m_renderer->GetRenderPass();
-	renderPassCI.framebuffer = m_vkSwapchain->GetFramebuffer(imageIndex);
+	renderPassCI.renderPass = m_pPass->GetHandle();
+	renderPassCI.framebuffer = m_pSwapchain->GetFramebuffer(imageIndex);
 	renderPassCI.renderArea.offset = { 0, 0 };
-	renderPassCI.renderArea.extent = m_surfaceExtent;
+	renderPassCI.renderArea.extent = m_vkSurfaceExtent;
 
 	VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
 	renderPassCI.clearValueCount = 1;
 	renderPassCI.pClearValues = &clearColor;
 
 	vkCmdBeginRenderPass(commandBuffer, &renderPassCI, VK_SUBPASS_CONTENTS_INLINE);
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_renderer->GetPipeline());
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pPipeline->GetHandle());
 	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -417,15 +437,15 @@ void VulkanApp::Application::Run() {
 
 bool VulkanApp::Application::RenderFrame() {
 	
-	vkWaitForFences(m_vkCore.GetVkLogicalDevice(), 1u, &m_inFlightFence, VK_TRUE, UINT64_MAX);
-	vkResetFences(m_vkCore.GetVkLogicalDevice(), 1u, &m_inFlightFence);
+	vkWaitForFences(m_core.GetVkLogicalDevice(), 1u, &m_vkFence, VK_TRUE, UINT64_MAX);
+	vkResetFences(m_core.GetVkLogicalDevice(), 1u, &m_vkFence);
 
 	uint32_t imgIndex = 0u;
 	VkResult result = vkAcquireNextImageKHR(
-		m_vkCore.GetVkLogicalDevice(), 
-		m_vkSwapchain->GetSwapchain(),
+		m_core.GetVkLogicalDevice(), 
+		m_pSwapchain->GetHandle(),
 		UINT64_MAX,
-		m_imageAvailableSem,
+		m_vkImgRdySem,
 		NULL,
 		&imgIndex);
 
@@ -433,23 +453,23 @@ bool VulkanApp::Application::RenderFrame() {
 		throw std::runtime_error(UTIL_EXC_MSG_EX("Cannot acquire a swapchain image", result));
 	}
 
-	vkResetCommandBuffer(m_gfxCommandBuffer, 0);
-	RecordCommandBuffer(m_gfxCommandBuffer, imgIndex);
+	vkResetCommandBuffer(m_vkCommandBuffer, 0);
+	RecordCommandBuffer(m_vkCommandBuffer, imgIndex);
 
 	VkSubmitInfo submitInfo{};
 	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
 	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
 	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &m_imageAvailableSem; // Semaphore will be signaled by vkAcquireNextImage 
+	submitInfo.pWaitSemaphores = &m_vkImgRdySem; // Semaphore will be signaled by vkAcquireNextImage 
 	submitInfo.pWaitDstStageMask = waitStages;
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &m_gfxCommandBuffer;
+	submitInfo.pCommandBuffers = &m_vkCommandBuffer;
 
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &m_renderFinishedSem;
+	submitInfo.pSignalSemaphores = &m_vkRenderDoneSem;
 
-	result = vkQueueSubmit(m_vkCore.m_vkQueue, 1, &submitInfo, m_inFlightFence);
+	result = vkQueueSubmit(m_core.m_vkQueue, 1, &submitInfo, m_vkFence);
 	if (result != VK_SUCCESS) {
 		throw std::runtime_error(UTIL_EXC_MSG_EX("Queue submit failed", result));
 	}
@@ -458,32 +478,32 @@ bool VulkanApp::Application::RenderFrame() {
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &m_renderFinishedSem;
+	presentInfo.pWaitSemaphores = &m_vkRenderDoneSem;
 
-	VkSwapchainKHR swapChains[] = { m_vkSwapchain->GetSwapchain() };
+	VkSwapchainKHR swapChains[] = { m_pSwapchain->GetHandle() };
 	presentInfo.swapchainCount = 1;
 	presentInfo.pSwapchains = swapChains;
 	presentInfo.pImageIndices = &imgIndex;
 
 	presentInfo.pResults = nullptr; // Optional
 
-	result = vkQueuePresentKHR(m_vkCore.m_vkQueue, &presentInfo);
+	result = vkQueuePresentKHR(m_core.m_vkQueue, &presentInfo);
 
 	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-		vkDeviceWaitIdle(m_vkCore.GetVkLogicalDevice());
+		vkDeviceWaitIdle(m_core.GetVkLogicalDevice());
 		
-		delete m_vkSwapchain;
-		m_vkSwapchain = nullptr;
+		delete m_pSwapchain;
+		m_pSwapchain = nullptr;
 		
 		VkSurfaceCapabilitiesKHR capabilities;
-		result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_vkCore.GetVkPhysicalDevice(), m_vkSurface, &capabilities);
+		result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_core.GetVkPhysicalDevice(), m_vkSurface, &capabilities);
 
 		if (result == VK_SUCCESS) {
-			m_surfaceExtent = capabilities.currentExtent;
+			m_vkSurfaceExtent = capabilities.currentExtent;
 			m_vkSurfaceFormat.format = VkFormat::VK_FORMAT_B8G8R8A8_SRGB;
 			m_vkSurfaceFormat.colorSpace = VkColorSpaceKHR::VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 
-			m_vkSwapchain = new CVulkanSwapchain(&m_vkCore, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat, m_renderer->GetRenderPass());
+			m_pSwapchain = new CVulkanSwapchain(&m_core, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat, m_pPass->GetHandle());
 		}
 		else if (result == VK_ERROR_SURFACE_LOST_KHR) {
 			return false; // The surface has been destroyed, stop rendering

@@ -9,14 +9,16 @@ namespace VulkanApp {
 	class CVulkanCore;
 	class CVulkanSwapchain {
 	public:
-		CVulkanSwapchain(CVulkanCore* const pParent, const uint32_t width, const uint32_t height, VkSurfaceKHR surface, VkSurfaceFormatKHR surfaceFormat, VkRenderPass renderPass);
+		CVulkanSwapchain(const CVulkanCore* const pCore, const uint32_t width, const uint32_t height, const VkSurfaceKHR surface, const VkSurfaceFormatKHR surfaceFormat, const VkRenderPass renderPass);
 		~CVulkanSwapchain();
-		const VkSwapchainKHR GetSwapchain() const { return m_vkSwapchain; }
-		const CVulkanCore* GetParent() const { return m_pParent; }
+		const VkSwapchainKHR GetHandle() const { return m_vkSwapchain; }
+		const CVulkanCore* GetCore() const { return m_pCore; }
 		const VkFramebuffer GetFramebuffer(const uint32_t index);
+		bool PresentModeAvailable(const VkPresentModeKHR mode) const;
+		bool SurfaceFormatAvailable(const VkSurfaceFormatKHR surfaceFormat) const;
 
 	private:
-		CVulkanCore* const m_pParent; // Guaranteed to be non-null
+		const CVulkanCore* const m_pCore; // Guaranteed to be non-null
 		uint32_t m_width = 0u;
 		uint32_t m_height = 0u;
 		VkRenderPass m_vkRenderPass = VK_NULL_HANDLE;
@@ -27,8 +29,6 @@ namespace VulkanApp {
 		std::vector<VkImageView> m_swapchainImageViews;
 		std::vector<VkFramebuffer> m_framebuffers;
 		void InitializeFramebuffer();
-		bool PresentModeAvailable(VkPresentModeKHR mode) const;
-		bool SurfaceFormatAvailable(VkSurfaceFormatKHR surfaceFormat) const;
 	};
 
 

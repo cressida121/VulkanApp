@@ -6,16 +6,19 @@
 #endif
 
 #include <vector>
+#include <string>
 
 namespace VulkanApp {
 	class CVulkanPass;
 	class CVulkanCore;
 	class CVulkanPipeline {
 	public:
-		CVulkanPipeline(CVulkanCore *pParent, CVulkanPass *pPass, const uint32_t vpWidth, const uint32_t vpHeight, VkPipelineShaderStageCreateInfo *shaderStages);
+		CVulkanPipeline(const CVulkanCore * const pCore, const CVulkanPass *const pPass, const uint32_t vpWidth, const uint32_t vpHeight, const VkPipelineShaderStageCreateInfo *const shaderStages);
 		~CVulkanPipeline() { Release(); }
+		VkPipeline GetHandle() const { return m_vkPipeline; };
 		void Initialize();
-
+		static VkShaderModule LoadCompiledShader(const VkDevice device, const std::string& filePath);
+		
 		VkPipelineVertexInputStateCreateInfo m_vertexInputStateCI = {};
 		VkPipelineInputAssemblyStateCreateInfo m_inputAssemblyCI = {};
 		VkViewport m_viewport = {};
@@ -33,7 +36,7 @@ namespace VulkanApp {
 
 		VkPipelineLayout m_vkPipelineLayout = VK_NULL_HANDLE;
 		VkPipeline m_vkPipeline = VK_NULL_HANDLE;
-		CVulkanCore *m_pCore = nullptr;
+		const CVulkanCore *const m_pCore = nullptr;
 	};
 }
 

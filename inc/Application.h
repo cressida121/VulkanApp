@@ -14,9 +14,9 @@ resources dependencies
 */
 
 namespace VulkanApp {
-	class Renderer;
+	class CVulkanPass;
+	class CVulkanPipeline;
 	class Application {
-		friend class Renderer;
 	public:
 		Application(const uint32_t windowWidth, const uint32_t windowHeight);
 		~Application();
@@ -26,23 +26,25 @@ namespace VulkanApp {
 	private:
 		bool RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, uint32_t rendererIndex = 0u);
 
-		CVulkanCore m_vkCore;
-		CVulkanSwapchain *m_vkSwapchain = nullptr;
-		Renderer* m_renderer = nullptr;
+		CVulkanCore m_core;
+		CVulkanPass *m_pPass = nullptr;
+		CVulkanPipeline *m_pPipeline = nullptr;
+		CVulkanSwapchain *m_pSwapchain = nullptr;
 
 		// Window Manager - Win32 window system adapter class
-		void* m_mainWindowHandle = nullptr;
+		void *m_mainWindowHandle = nullptr;
 		VkSurfaceKHR m_vkSurface = VK_NULL_HANDLE;
 		VkSurfaceFormatKHR m_vkSurfaceFormat;
-		VkExtent2D m_surfaceExtent;
+		VkExtent2D m_vkSurfaceExtent;
 
 		// Command manager
-		VkCommandPool m_gfxCommandPool;
-		VkCommandBuffer m_gfxCommandBuffer; // Destroyed along with VkCommandPool
+		VkCommandPool m_vkCommandPool;
+		VkCommandBuffer m_vkCommandBuffer; // Destroyed along with VkCommandPool
 
 		// Pipeline
-		VkSemaphore m_imageAvailableSem = VK_NULL_HANDLE;
-		VkSemaphore m_renderFinishedSem = VK_NULL_HANDLE;
-		VkFence m_inFlightFence = VK_NULL_HANDLE;
+		VkPipelineShaderStageCreateInfo m_shaderStageCI[2];
+		VkSemaphore m_vkImgRdySem = VK_NULL_HANDLE;
+		VkSemaphore m_vkRenderDoneSem = VK_NULL_HANDLE;
+		VkFence m_vkFence = VK_NULL_HANDLE;
 	};
 }

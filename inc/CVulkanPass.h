@@ -12,12 +12,11 @@ namespace VulkanApp {
 	class CVulkanCore;
 	class CVulkanPass {
 	public:
-		CVulkanPass(CVulkanCore *pParent, std::vector<VkImageView> renderTargets, const uint32_t fbWidth, const uint32_t fbHeight);
+		CVulkanPass(const CVulkanCore *const pCore, const VkFormat surfaceFormat);
 		~CVulkanPass();
 		void Initialize();
 		void Release();
-		void SetupFramebuffers(std::vector<VkImageView> renderTargets);
-		const VkRenderPass GetRenderPass() const { return m_vkRenderPass; };
+		const VkRenderPass GetHandle() const { return m_vkRenderPass; };
 
 		VkAttachmentDescription m_attachmentDesc = {};
 		VkAttachmentReference m_colorAttachmentRef = {};
@@ -26,13 +25,8 @@ namespace VulkanApp {
 		VkRenderPassCreateInfo m_renderPassCI = {};
 
 	private:
-		CVulkanCore* m_pCore = nullptr;
+		const CVulkanCore *const m_pCore = nullptr;
 		VkRenderPass m_vkRenderPass = VK_NULL_HANDLE;
-		std::vector<VkFramebuffer> m_vkFramebuffers;
-		uint32_t m_fbWidth = 0;
-		uint32_t m_fbHeight = 0;
-
-		void ReleaseFramebuffers();
 	};
 }
 

@@ -6,14 +6,14 @@
 #include <Utilities.h>
 
 VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
-	CVulkanCore *const pParent,
+	const CVulkanCore *const pCore,
 	const uint32_t width,
 	const uint32_t height,
-	VkSurfaceKHR surface,
-	VkSurfaceFormatKHR surfaceFormat,
-	VkRenderPass renderPass) : m_pParent(pParent) , m_vkSurfaceFormat(surfaceFormat), m_width(width), m_height(height), m_vkRenderPass(renderPass), m_vkSurface(surface) {
+	const VkSurfaceKHR surface,
+	const VkSurfaceFormatKHR surfaceFormat,
+	const VkRenderPass renderPass) : m_pCore(pCore) , m_vkSurfaceFormat(surfaceFormat), m_width(width), m_height(height), m_vkRenderPass(renderPass), m_vkSurface(surface) {
 
-	if (m_pParent == nullptr) {
+	if (m_pCore == nullptr) {
 		throw std::runtime_error(UTIL_EXC_MSG( "Pointer to parent object was null"));
 	}
 
@@ -25,7 +25,7 @@ VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 	// Retrieve the detalis about swapchains
 
 	VkSurfaceCapabilitiesKHR capabilities;
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_pParent->GetVkPhysicalDevice(), m_vkSurface, &capabilities);
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_pCore->GetVkPhysicalDevice(), m_vkSurface, &capabilities);
 	
 	if (m_width > capabilities.maxImageExtent.width ||
 		m_height > capabilities.maxImageExtent.height ||
@@ -61,7 +61,7 @@ VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 	m_swapchainCI.clipped = VK_TRUE;
 	m_swapchainCI.oldSwapchain = VK_NULL_HANDLE;
 
-	VkResult result = vkCreateSwapchainKHR(m_pParent->GetVkLogicalDevice(), &m_swapchainCI, nullptr, &m_vkSwapchain);
+	VkResult result = vkCreateSwapchainKHR(m_pCore->GetVkLogicalDevice(), &m_swapchainCI, nullptr, &m_vkSwapchain);
 	if(result != VK_SUCCESS) {
 		throw std::runtime_error(UTIL_EXC_MSG_EX("Swapchain creation failed", result));
 	}
@@ -73,18 +73,18 @@ VulkanApp::CVulkanSwapchain::~CVulkanSwapchain() {
 	
 	for (auto framebuffer : m_framebuffers) {
 		if (framebuffer) {
-			vkDestroyFramebuffer(m_pParent->GetVkLogicalDevice(), framebuffer, nullptr);
+			vkDestroyFramebuffer(m_pCore->GetVkLogicalDevice(), framebuffer, nullptr);
 		}
 	}
 
 	for (auto imageView : m_swapchainImageViews) {
 		if (imageView) {
-			vkDestroyImageView(m_pParent->GetVkLogicalDevice(), imageView, nullptr);
+			vkDestroyImageView(m_pCore->GetVkLogicalDevice(), imageView, nullptr);
 		}
 	}
 
 	if (m_vkSwapchain) {
-		vkDestroySwapchainKHR(m_pParent->GetVkLogicalDevice(), m_vkSwapchain, nullptr);
+		vkDestroySwapchainKHR(m_pCore->GetVkLogicalDevice(), m_vkSwapchain, nullptr);
 	}
 
 }
@@ -100,14 +100,14 @@ void VulkanApp::CVulkanSwapchain::InitializeFramebuffer() {
 
 	// Retrieve the swap chain images
 	uint32_t imageCount = 0;
-	VkResult result = vkGetSwapchainImagesKHR(m_pParent->GetVkLogicalDevice(), m_vkSwapchain, &imageCount, nullptr);
+	VkResult result = vkGetSwapchainImagesKHR(m_pCore->GetVkLogicalDevice(), m_vkSwapchain, &imageCount, nullptr);
 	if (result != VK_SUCCESS) {
 		throw std::runtime_error(UTIL_EXC_MSG_EX("Failed to obtain swapchain images count", result));
 	}
 
 	std::vector<VkImage> swapchainImages(imageCount);
 
-	result = vkGetSwapchainImagesKHR(m_pParent->GetVkLogicalDevice(), m_vkSwapchain, &imageCount, swapchainImages.data());
+	result = vkGetSwapchainImagesKHR(m_pCore->GetVkLogicalDevice(), m_vkSwapchain, &imageCount, swapchainImages.data());
 	if (result != VK_SUCCESS) {
 		throw std::runtime_error(UTIL_EXC_MSG_EX("Cannot retrieve swapchain images", result));
 	}
@@ -132,7 +132,7 @@ void VulkanApp::CVulkanSwapchain::InitializeFramebuffer() {
 
 	for (uint32_t i = 0; i < m_swapchainImageViews.size(); i++) {
 		imageViewCI.image = swapchainImages[i];
-		result = vkCreateImageView(m_pParent->GetVkLogicalDevice(), &imageViewCI, nullptr, m_swapchainImageViews.data() + i);
+		result = vkCreateImageView(m_pCore->GetVkLogicalDevice(), &imageViewCI, nullptr, m_swapchainImageViews.data() + i);
 		if (result != VK_SUCCESS) {
 			throw std::runtime_error(UTIL_EXC_MSG_EX("Cannot create an image view", result));
 		}
@@ -153,29 +153,29 @@ void VulkanApp::CVulkanSwapchain::InitializeFramebuffer() {
 
 	for (auto imageView : m_swapchainImageViews) {
 		framebufferCI.pAttachments = &imageView;
-		if (vkCreateFramebuffer(m_pParent->GetVkLogicalDevice(), &framebufferCI, nullptr, &m_framebuffers[i++]) != VK_SUCCESS) {
+		if (vkCreateFramebuffer(m_pCore->GetVkLogicalDevice(), &framebufferCI, nullptr, &m_framebuffers[i++]) != VK_SUCCESS) {
 			throw std::runtime_error("[Runtime error] Failed to create framebuffer");
 		}
 	}
 }
 
-bool VulkanApp::CVulkanSwapchain::PresentModeAvailable(VkPresentModeKHR mode) const {
+bool VulkanApp::CVulkanSwapchain::PresentModeAvailable(const VkPresentModeKHR mode) const {
 	uint32_t count = 0;
-	vkGetPhysicalDeviceSurfacePresentModesKHR(m_pParent->GetVkPhysicalDevice(), m_vkSurface, &count, nullptr);
+	vkGetPhysicalDeviceSurfacePresentModesKHR(m_pCore->GetVkPhysicalDevice(), m_vkSurface, &count, nullptr);
 
 	std::vector<VkPresentModeKHR> presentModes(count);
-	vkGetPhysicalDeviceSurfacePresentModesKHR(m_pParent->GetVkPhysicalDevice(), m_vkSurface, &count, presentModes.data());
+	vkGetPhysicalDeviceSurfacePresentModesKHR(m_pCore->GetVkPhysicalDevice(), m_vkSurface, &count, presentModes.data());
 
 	return std::find(presentModes.cbegin(), presentModes.cend(), mode) != presentModes.cend();
 }
 
-bool VulkanApp::CVulkanSwapchain::SurfaceFormatAvailable(VkSurfaceFormatKHR surfaceFormat) const {
+bool VulkanApp::CVulkanSwapchain::SurfaceFormatAvailable(const VkSurfaceFormatKHR surfaceFormat) const {
 	// Surface formats for the physical device
 	uint32_t count = 0;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(m_pParent->GetVkPhysicalDevice(), m_vkSurface, &count, nullptr);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(m_pCore->GetVkPhysicalDevice(), m_vkSurface, &count, nullptr);
 
 	std::vector<VkSurfaceFormatKHR> formats(count);
-	vkGetPhysicalDeviceSurfaceFormatsKHR(m_pParent->GetVkPhysicalDevice(), m_vkSurface, &count, formats.data());
+	vkGetPhysicalDeviceSurfaceFormatsKHR(m_pCore->GetVkPhysicalDevice(), m_vkSurface, &count, formats.data());
 
 	// Selecting required format and color space
 	bool formatFound = false;
