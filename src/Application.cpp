@@ -219,9 +219,11 @@ static LRESULT MyWindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
 		return 0;
 
 	case WM_DESTROY:
-		PostQuitMessage(0);
 		return 0;
 
+	case WM_CLOSE:
+		PostQuitMessage(0);
+		return 0;
 		// 
 		// Process other messages. 
 		// 
@@ -428,16 +430,20 @@ void VulkanApp::Application::Run() {
 	ShowWindow(static_cast<HWND>(m_mainWindowHandle), SW_SHOW);
 
 	MSG msg = { 0 };
-	do {
+	while (true) {
 		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
+			if (msg.message == WM_QUIT) {
+				return;
+			}
 		}
-	} while (RenderFrame());
+		RenderFrame();
+	}
 
 }
 
-bool VulkanApp::Application::RenderFrame() {
+void VulkanApp::Application::RenderFrame() {
 	
 	vkWaitForFences(m_core.GetVkLogicalDevice(), 1u, &m_vkFence, VK_TRUE, UINT64_MAX);
 	vkResetFences(m_core.GetVkLogicalDevice(), 1u, &m_vkFence);
@@ -507,9 +513,6 @@ bool VulkanApp::Application::RenderFrame() {
 
 			m_pSwapchain = new CVulkanSwapchain(&m_core, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat, m_pPass->GetHandle());
 		}
-		else if (result == VK_ERROR_SURFACE_LOST_KHR) {
-			return false; // The surface has been destroyed, stop rendering
-		}
 		else {
 			throw std::runtime_error(UTIL_EXC_MSG_EX("Swapchain recreation failure", result));
 		}
@@ -517,5 +520,4 @@ bool VulkanApp::Application::RenderFrame() {
 	} else if (result != VK_SUCCESS) {
 		throw std::runtime_error(UTIL_EXC_MSG_EX("Frame presentation failed", result));
 	}
-	return true;
 }

@@ -21,7 +21,7 @@ namespace VulkanApp {
 		Application(const uint32_t windowWidth, const uint32_t windowHeight);
 		~Application();
 		void Run();
-		bool RenderFrame();
+		void RenderFrame();
 
 	private:
 		bool RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, uint32_t rendererIndex = 0u);
