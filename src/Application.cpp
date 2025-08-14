@@ -354,7 +354,8 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	fenceCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
 	if (vkCreateSemaphore(m_core.GetVkLogicalDevice(), &semaphoreCI, nullptr, &m_vkImgRdySem) != VK_SUCCESS ||
-		vkCreateSemaphore(m_core.GetVkLogicalDevice(), &semaphoreCI, nullptr, &m_vkRenderDoneSem) != VK_SUCCESS ||
+		vkCreateSemaphore(m_core.GetVkLogicalDevice(), &semaphoreCI, nullptr, &m_vkRenderDoneSem[0]) != VK_SUCCESS ||
+		vkCreateSemaphore(m_core.GetVkLogicalDevice(), &semaphoreCI, nullptr, &m_vkRenderDoneSem[1]) != VK_SUCCESS ||
 		vkCreateFence(m_core.GetVkLogicalDevice(), &fenceCI, nullptr, &m_vkFence) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] failed to create semaphores");
 	}
@@ -364,7 +365,8 @@ VulkanApp::Application::~Application() {
 	// Cleanup created Vulkan resources
 	vkDeviceWaitIdle(m_core.GetVkLogicalDevice());
 	vkDestroySemaphore(m_core.GetVkLogicalDevice(), m_vkImgRdySem, nullptr);
-	vkDestroySemaphore(m_core.GetVkLogicalDevice(), m_vkRenderDoneSem, nullptr);
+	vkDestroySemaphore(m_core.GetVkLogicalDevice(), m_vkRenderDoneSem[0], nullptr);
+	vkDestroySemaphore(m_core.GetVkLogicalDevice(), m_vkRenderDoneSem[1], nullptr);
 	vkDestroyFence(m_core.GetVkLogicalDevice(), m_vkFence, nullptr);
 	vkDestroyCommandPool(m_core.GetVkLogicalDevice(), m_vkCommandPool, nullptr);
 
@@ -442,7 +444,7 @@ bool VulkanApp::Application::RenderFrame() {
 
 	uint32_t imgIndex = 0u;
 	VkResult result = vkAcquireNextImageKHR(
-		m_core.GetVkLogicalDevice(), 
+		m_core.GetVkLogicalDevice(),
 		m_pSwapchain->GetHandle(),
 		UINT64_MAX,
 		m_vkImgRdySem,
@@ -467,7 +469,7 @@ bool VulkanApp::Application::RenderFrame() {
 	submitInfo.pCommandBuffers = &m_vkCommandBuffer;
 
 	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &m_vkRenderDoneSem;
+	submitInfo.pSignalSemaphores = &m_vkRenderDoneSem[imgIndex];
 
 	result = vkQueueSubmit(m_core.m_vkQueue, 1, &submitInfo, m_vkFence);
 	if (result != VK_SUCCESS) {
@@ -478,7 +480,7 @@ bool VulkanApp::Application::RenderFrame() {
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
 
 	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &m_vkRenderDoneSem;
+	presentInfo.pWaitSemaphores = &m_vkRenderDoneSem[imgIndex];
 
 	VkSwapchainKHR swapChains[] = { m_pSwapchain->GetHandle() };
 	presentInfo.swapchainCount = 1;

@@ -44,7 +44,7 @@ namespace VulkanApp {
 		// Pipeline
 		VkPipelineShaderStageCreateInfo m_shaderStageCI[2];
 		VkSemaphore m_vkImgRdySem = VK_NULL_HANDLE;
-		VkSemaphore m_vkRenderDoneSem = VK_NULL_HANDLE;
+		VkSemaphore m_vkRenderDoneSem[2] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
 		VkFence m_vkFence = VK_NULL_HANDLE;
 	};
 }
