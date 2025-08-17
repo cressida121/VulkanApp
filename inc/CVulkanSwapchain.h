@@ -16,19 +16,20 @@ namespace VulkanApp {
 		const VkFramebuffer GetFramebuffer(const uint32_t index);
 		bool PresentModeAvailable(const VkPresentModeKHR mode) const;
 		bool SurfaceFormatAvailable(const VkSurfaceFormatKHR surfaceFormat) const;
+		void Update();
+		bool SetPresentMode(const VkPresentModeKHR mode);
+		bool SetImageFormat(const VkSurfaceFormatKHR surfaceFormat);
+		bool SetImageSize(const uint32_t width, const uint32_t height);
 
 	private:
 		const CVulkanCore* const m_pCore; // Guaranteed to be non-null
-		uint32_t m_width = 0u;
-		uint32_t m_height = 0u;
 		VkRenderPass m_vkRenderPass = VK_NULL_HANDLE;
-		VkSurfaceKHR m_vkSurface = VK_NULL_HANDLE;
-		VkSurfaceFormatKHR m_vkSurfaceFormat = {};
 		VkSwapchainCreateInfoKHR m_swapchainCI = {};
 		VkSwapchainKHR m_vkSwapchain = VK_NULL_HANDLE;
 		std::vector<VkImageView> m_swapchainImageViews;
 		std::vector<VkFramebuffer> m_framebuffers;
 		void InitializeFramebuffer();
+		void ReleaseFramebuffer();
 	};
 
 

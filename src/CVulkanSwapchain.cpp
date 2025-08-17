@@ -11,7 +11,7 @@ VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 	const uint32_t height,
 	const VkSurfaceKHR surface,
 	const VkSurfaceFormatKHR surfaceFormat,
-	const VkRenderPass renderPass) : m_pCore(pCore) , m_vkSurfaceFormat(surfaceFormat), m_width(width), m_height(height), m_vkRenderPass(renderPass), m_vkSurface(surface) {
+	const VkRenderPass renderPass) : m_pCore(pCore) , m_vkRenderPass(renderPass) {
 
 	if (m_pCore == nullptr) {
 		throw std::runtime_error(UTIL_EXC_MSG( "Pointer to parent object was null"));
@@ -20,31 +20,22 @@ VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 	m_swapchainCI.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	m_swapchainCI.pNext = nullptr;
 	m_swapchainCI.flags = NULL;
-	m_swapchainCI.surface = m_vkSurface;
+	m_swapchainCI.surface = surface;
 
 	// Retrieve the detalis about swapchains
-
 	VkSurfaceCapabilitiesKHR capabilities;
-	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_pCore->GetVkPhysicalDevice(), m_vkSurface, &capabilities);
-	
-	if (m_width > capabilities.maxImageExtent.width ||
-		m_height > capabilities.maxImageExtent.height ||
-		m_width < capabilities.minImageExtent.width ||
-		m_height < capabilities.minImageExtent.height) {
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_pCore->GetVkPhysicalDevice(), surface, &capabilities);
 
+	m_swapchainCI.minImageCount = capabilities.minImageCount + 1;
+	m_swapchainCI.imageArrayLayers = capabilities.maxImageArrayLayers;
+	
+	if (!SetImageSize(width, height)) {
 		throw std::runtime_error(UTIL_EXC_MSG("Invalid swapchain extent"));
 	}
 
-	m_swapchainCI.imageExtent.width = m_width;
-	m_swapchainCI.imageExtent.height = m_height;
-	m_swapchainCI.minImageCount = capabilities.minImageCount + 1;
-	m_swapchainCI.imageArrayLayers = capabilities.maxImageArrayLayers;
-
-	if (!SurfaceFormatAvailable(m_vkSurfaceFormat)) {
+	if (!SetImageFormat(surfaceFormat)) {
 		throw std::runtime_error(UTIL_EXC_MSG("Specified VkSurfaceFormatKHR is not supported by the device"));
 	}
-	m_swapchainCI.imageFormat = m_vkSurfaceFormat.format;
-	m_swapchainCI.imageColorSpace = m_vkSurfaceFormat.colorSpace;
 
 	m_swapchainCI.imageUsage = VkImageUsageFlagBits::VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 	m_swapchainCI.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -53,10 +44,9 @@ VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 	m_swapchainCI.preTransform = capabilities.currentTransform;
 	m_swapchainCI.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 
-	if (!PresentModeAvailable(VK_PRESENT_MODE_FIFO_KHR)) {
+	if (!SetPresentMode(VK_PRESENT_MODE_FIFO_KHR)) {
 		throw std::runtime_error(UTIL_EXC_MSG("Specified present mode is not supported"));
 	}
-	m_swapchainCI.presentMode = VK_PRESENT_MODE_FIFO_KHR;
 
 	m_swapchainCI.clipped = VK_TRUE;
 	m_swapchainCI.oldSwapchain = VK_NULL_HANDLE;
@@ -70,23 +60,11 @@ VulkanApp::CVulkanSwapchain::CVulkanSwapchain(
 }
 
 VulkanApp::CVulkanSwapchain::~CVulkanSwapchain() {
-	
-	for (auto framebuffer : m_framebuffers) {
-		if (framebuffer) {
-			vkDestroyFramebuffer(m_pCore->GetVkLogicalDevice(), framebuffer, nullptr);
-		}
-	}
-
-	for (auto imageView : m_swapchainImageViews) {
-		if (imageView) {
-			vkDestroyImageView(m_pCore->GetVkLogicalDevice(), imageView, nullptr);
-		}
-	}
-
+	ReleaseFramebuffer();
 	if (m_vkSwapchain) {
 		vkDestroySwapchainKHR(m_pCore->GetVkLogicalDevice(), m_vkSwapchain, nullptr);
+		m_vkSwapchain = VK_NULL_HANDLE;
 	}
-
 }
 
 const VkFramebuffer VulkanApp::CVulkanSwapchain::GetFramebuffer(const uint32_t index) {
@@ -119,7 +97,7 @@ void VulkanApp::CVulkanSwapchain::InitializeFramebuffer() {
 	VkImageViewCreateInfo imageViewCI = {};
 	imageViewCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	imageViewCI.viewType = VK_IMAGE_VIEW_TYPE_2D;
-	imageViewCI.format = m_vkSurfaceFormat.format;
+	imageViewCI.format = m_swapchainCI.imageFormat;
 	imageViewCI.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
 	imageViewCI.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
 	imageViewCI.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -147,8 +125,8 @@ void VulkanApp::CVulkanSwapchain::InitializeFramebuffer() {
 	framebufferCI.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 	framebufferCI.attachmentCount = 1;
 	framebufferCI.renderPass = m_vkRenderPass;
-	framebufferCI.width = m_width;
-	framebufferCI.height = m_height;
+	framebufferCI.width = m_swapchainCI.imageExtent.width;
+	framebufferCI.height = m_swapchainCI.imageExtent.height;
 	framebufferCI.layers = 1;
 
 	for (auto imageView : m_swapchainImageViews) {
@@ -159,12 +137,31 @@ void VulkanApp::CVulkanSwapchain::InitializeFramebuffer() {
 	}
 }
 
+void VulkanApp::CVulkanSwapchain::ReleaseFramebuffer() {
+
+	for (auto framebuffer : m_framebuffers) {
+		if (framebuffer) {
+			vkDestroyFramebuffer(m_pCore->GetVkLogicalDevice(), framebuffer, nullptr);
+		}
+	}
+
+	m_framebuffers.clear();
+
+	for (auto imageView : m_swapchainImageViews) {
+		if (imageView) {
+			vkDestroyImageView(m_pCore->GetVkLogicalDevice(), imageView, nullptr);
+		}
+	}
+
+	m_swapchainImageViews.clear();
+}
+
 bool VulkanApp::CVulkanSwapchain::PresentModeAvailable(const VkPresentModeKHR mode) const {
 	uint32_t count = 0;
-	vkGetPhysicalDeviceSurfacePresentModesKHR(m_pCore->GetVkPhysicalDevice(), m_vkSurface, &count, nullptr);
+	vkGetPhysicalDeviceSurfacePresentModesKHR(m_pCore->GetVkPhysicalDevice(), m_swapchainCI.surface, &count, nullptr);
 
 	std::vector<VkPresentModeKHR> presentModes(count);
-	vkGetPhysicalDeviceSurfacePresentModesKHR(m_pCore->GetVkPhysicalDevice(), m_vkSurface, &count, presentModes.data());
+	vkGetPhysicalDeviceSurfacePresentModesKHR(m_pCore->GetVkPhysicalDevice(), m_swapchainCI.surface, &count, presentModes.data());
 
 	return std::find(presentModes.cbegin(), presentModes.cend(), mode) != presentModes.cend();
 }
@@ -172,10 +169,10 @@ bool VulkanApp::CVulkanSwapchain::PresentModeAvailable(const VkPresentModeKHR mo
 bool VulkanApp::CVulkanSwapchain::SurfaceFormatAvailable(const VkSurfaceFormatKHR surfaceFormat) const {
 	// Surface formats for the physical device
 	uint32_t count = 0;
-	vkGetPhysicalDeviceSurfaceFormatsKHR(m_pCore->GetVkPhysicalDevice(), m_vkSurface, &count, nullptr);
+	vkGetPhysicalDeviceSurfaceFormatsKHR(m_pCore->GetVkPhysicalDevice(), m_swapchainCI.surface, &count, nullptr);
 
 	std::vector<VkSurfaceFormatKHR> formats(count);
-	vkGetPhysicalDeviceSurfaceFormatsKHR(m_pCore->GetVkPhysicalDevice(), m_vkSurface, &count, formats.data());
+	vkGetPhysicalDeviceSurfaceFormatsKHR(m_pCore->GetVkPhysicalDevice(), m_swapchainCI.surface, &count, formats.data());
 
 	// Selecting required format and color space
 	bool formatFound = false;
@@ -186,4 +183,56 @@ bool VulkanApp::CVulkanSwapchain::SurfaceFormatAvailable(const VkSurfaceFormatKH
 		}
 	}
 	return false;
+}
+
+void VulkanApp::CVulkanSwapchain::Update() {
+
+	ReleaseFramebuffer();
+
+	m_swapchainCI.oldSwapchain = m_vkSwapchain;
+
+	VkResult result = vkCreateSwapchainKHR(m_pCore->GetVkLogicalDevice(), &m_swapchainCI, nullptr, &m_vkSwapchain);
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error(UTIL_EXC_MSG_EX("Swapchain creation failed", result));
+	}
+
+	vkDestroySwapchainKHR(m_pCore->GetVkLogicalDevice(), m_swapchainCI.oldSwapchain, nullptr);
+
+	InitializeFramebuffer();
+}
+
+bool VulkanApp::CVulkanSwapchain::SetPresentMode(const VkPresentModeKHR mode) {
+	if (!PresentModeAvailable(mode)) {
+		return false;
+	}
+	m_swapchainCI.presentMode = mode;
+	return true;
+}
+
+bool VulkanApp::CVulkanSwapchain::SetImageFormat(const VkSurfaceFormatKHR surfaceFormat)
+{
+	if (!SurfaceFormatAvailable(surfaceFormat)) {
+		return false;
+	}
+	m_swapchainCI.imageFormat = surfaceFormat.format;
+	m_swapchainCI.imageColorSpace = surfaceFormat.colorSpace;
+	return true;
+}
+
+bool VulkanApp::CVulkanSwapchain::SetImageSize(const uint32_t width, const uint32_t height)
+{
+	VkSurfaceCapabilitiesKHR capabilities;
+	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_pCore->GetVkPhysicalDevice(), m_swapchainCI.surface, &capabilities);
+
+	if (width > capabilities.maxImageExtent.width ||
+		height > capabilities.maxImageExtent.height ||
+		width < capabilities.minImageExtent.width ||
+		height < capabilities.minImageExtent.height) {
+
+		return false;
+	}
+
+	m_swapchainCI.imageExtent.width = width;
+	m_swapchainCI.imageExtent.height = height;
+	return true;
 }

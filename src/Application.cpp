@@ -430,18 +430,13 @@ void VulkanApp::Application::RenderFrame() {
 	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
 		vkDeviceWaitIdle(m_core.GetVkLogicalDevice());
 		
-		delete m_pSwapchain;
-		m_pSwapchain = nullptr;
-		
-		VkSurfaceCapabilitiesKHR capabilities;
-		result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_core.GetVkPhysicalDevice(), m_vkSurface, &capabilities);
+		VkSurfaceCapabilitiesKHR newSurfaceCaps;
+		result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_core.GetVkPhysicalDevice(), m_vkSurface, &newSurfaceCaps);
 
 		if (result == VK_SUCCESS) {
-			m_vkSurfaceExtent = capabilities.currentExtent;
-			m_vkSurfaceFormat.format = VkFormat::VK_FORMAT_B8G8R8A8_SRGB;
-			m_vkSurfaceFormat.colorSpace = VkColorSpaceKHR::VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
-
-			m_pSwapchain = new CVulkanSwapchain(&m_core, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat, m_pPass->GetHandle());
+			m_vkSurfaceExtent = newSurfaceCaps.currentExtent;
+			m_pSwapchain->SetImageSize(m_vkSurfaceExtent.width, m_vkSurfaceExtent.height);
+			m_pSwapchain->Update();
 		}
 		else {
 			throw std::runtime_error(UTIL_EXC_MSG_EX("Swapchain recreation failure", result));
