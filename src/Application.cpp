@@ -12,6 +12,8 @@
 #include <optional>
 #include <algorithm>
 
+#define RENDER_RES_W 640
+#define RENDER_RES_H 480
 
 // Vulkan information retrieval functions (Information available in Vulkan Caps Viewer)
 
@@ -320,31 +322,8 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	m_shaderStageCI[1].module = CVulkanPipeline::LoadCompiledShader(m_core.GetVkLogicalDevice(), FRAGMENT_SHADER_PATH);
 	m_shaderStageCI[1].pName = "main";
 	
-	m_pPipeline = new CVulkanPipeline(&m_core, m_pPass, capabilities.currentExtent.width, capabilities.currentExtent.height, m_shaderStageCI);
+	m_pPipeline = new CVulkanPipeline(&m_core, m_pPass, RENDER_RES_W, RENDER_RES_H, m_shaderStageCI);
 	m_pSwapchain = new CVulkanSwapchain(&m_core, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat, m_pPass->GetHandle());
-
-	// Create command pool
-	std::optional<uint32_t> qfIndex = getQueueFamilies(m_core.GetVkPhysicalDevice(), VK_QUEUE_GRAPHICS_BIT);
-	
-	VkCommandPoolCreateInfo commandPoolCI = {};
-	commandPoolCI.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-	commandPoolCI.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	commandPoolCI.queueFamilyIndex = qfIndex.value();
-
-	if (vkCreateCommandPool(m_core.GetVkLogicalDevice(), &commandPoolCI, nullptr, &m_vkCommandPool) != VK_SUCCESS) {
-		throw std::runtime_error("[Runtime error] Cannot create a command pool");
-	}
-
-	// Create command buffer
-	VkCommandBufferAllocateInfo commandBufferCI = {};
-	commandBufferCI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	commandBufferCI.commandPool = m_vkCommandPool;
-	commandBufferCI.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	commandBufferCI.commandBufferCount = 1;
-
-	if (vkAllocateCommandBuffers(m_core.GetVkLogicalDevice(), &commandBufferCI, &m_vkCommandBuffer) != VK_SUCCESS) {
-		throw std::runtime_error("[Runtime error] Failed to create a command pool");
-	}
 
 	// Create synchronization objects
 
@@ -370,7 +349,6 @@ VulkanApp::Application::~Application() {
 	vkDestroySemaphore(m_core.GetVkLogicalDevice(), m_vkRenderDoneSem[0], nullptr);
 	vkDestroySemaphore(m_core.GetVkLogicalDevice(), m_vkRenderDoneSem[1], nullptr);
 	vkDestroyFence(m_core.GetVkLogicalDevice(), m_vkFence, nullptr);
-	vkDestroyCommandPool(m_core.GetVkLogicalDevice(), m_vkCommandPool, nullptr);
 
 	if (m_pSwapchain) {
 		delete m_pSwapchain;
@@ -388,42 +366,6 @@ VulkanApp::Application::~Application() {
 	vkDestroyShaderModule(m_core.GetVkLogicalDevice(), m_shaderStageCI[1].module, nullptr);
 	vkDestroySurfaceKHR(m_core.GetVkInstance(), m_vkSurface, nullptr);
 }
-
-bool VulkanApp::Application::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, uint32_t rendererIndex) {
-	
-
-	VkCommandBufferBeginInfo beginInfoCI = {};
-	beginInfoCI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfoCI.flags = 0;
-	beginInfoCI.pInheritanceInfo = nullptr;
-
-	if (vkBeginCommandBuffer(commandBuffer, &beginInfoCI) != VK_SUCCESS) {
-		throw std::runtime_error("[Runtime error] Failed to begin a command buffer");
-	}
-
-	VkRenderPassBeginInfo renderPassCI = {};
-	renderPassCI.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassCI.renderPass = m_pPass->GetHandle();
-	renderPassCI.framebuffer = m_pSwapchain->GetFramebuffer(imageIndex);
-	renderPassCI.renderArea.offset = { 0, 0 };
-	renderPassCI.renderArea.extent = m_vkSurfaceExtent;
-
-	VkClearValue clearColor = { {{0.0f, 0.0f, 0.0f, 1.0f}} };
-	renderPassCI.clearValueCount = 1;
-	renderPassCI.pClearValues = &clearColor;
-
-	vkCmdBeginRenderPass(commandBuffer, &renderPassCI, VK_SUBPASS_CONTENTS_INLINE);
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pPipeline->GetHandle());
-	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
-	vkCmdEndRenderPass(commandBuffer);
-
-	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-		throw std::runtime_error("[Runtime error] Failed to end a command buffer");
-	}
-
-	return true;
-}
-
 
 void VulkanApp::Application::Run() {
 
@@ -461,26 +403,14 @@ void VulkanApp::Application::RenderFrame() {
 		throw std::runtime_error(UTIL_EXC_MSG_EX("Cannot acquire a swapchain image", result));
 	}
 
-	vkResetCommandBuffer(m_vkCommandBuffer, 0);
-	RecordCommandBuffer(m_vkCommandBuffer, imgIndex);
-
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = &m_vkImgRdySem; // Semaphore will be signaled by vkAcquireNextImage 
-	submitInfo.pWaitDstStageMask = waitStages;
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &m_vkCommandBuffer;
-
-	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = &m_vkRenderDoneSem[imgIndex];
-
-	result = vkQueueSubmit(m_core.m_vkQueue, 1, &submitInfo, m_vkFence);
-	if (result != VK_SUCCESS) {
-		throw std::runtime_error(UTIL_EXC_MSG_EX("Queue submit failed", result));
-	}
+	m_pPass->SubmitWorkload(
+		m_core.m_vkQueue,
+		m_pPipeline->GetHandle(),
+		m_vkImgRdySem,
+		m_vkRenderDoneSem[imgIndex],
+		m_vkFence,
+		m_pSwapchain->GetFramebuffer(imgIndex),
+		{ {0,0}, m_vkSurfaceExtent });
 
 	VkPresentInfoKHR presentInfo{};
 	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;

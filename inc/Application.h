@@ -24,7 +24,7 @@ namespace VulkanApp {
 		void RenderFrame();
 
 	private:
-		bool RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex, uint32_t rendererIndex = 0u);
+		bool RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
 		CVulkanCore m_core;
 		CVulkanPass *m_pPass = nullptr;
@@ -36,10 +36,6 @@ namespace VulkanApp {
 		VkSurfaceKHR m_vkSurface = VK_NULL_HANDLE;
 		VkSurfaceFormatKHR m_vkSurfaceFormat;
 		VkExtent2D m_vkSurfaceExtent;
-
-		// Command manager
-		VkCommandPool m_vkCommandPool;
-		VkCommandBuffer m_vkCommandBuffer; // Destroyed along with VkCommandPool
 
 		// Pipeline
 		VkPipelineShaderStageCreateInfo m_shaderStageCI[2];
