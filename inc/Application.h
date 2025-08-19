@@ -16,6 +16,7 @@ resources dependencies
 namespace VulkanApp {
 	class CVulkanPass;
 	class CVulkanPipeline;
+	class CVulkanSwapchain;
 	class Application {
 	public:
 		Application(const uint32_t windowWidth, const uint32_t windowHeight);
@@ -24,8 +25,6 @@ namespace VulkanApp {
 		void RenderFrame();
 
 	private:
-		bool RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-
 		CVulkanCore m_core;
 		CVulkanPass *m_pPass = nullptr;
 		CVulkanPipeline *m_pPipeline = nullptr;

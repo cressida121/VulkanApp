@@ -7,7 +7,6 @@
 #include <vector>
 
 namespace VulkanApp {
-	class CVulkanSwapchain;
 	class CVulkanCore {
 	public:	
 		CVulkanCore(const std::string& applicationName);
