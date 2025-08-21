@@ -20,6 +20,8 @@ namespace VulkanApp {
 		bool SetPresentMode(const VkPresentModeKHR mode);
 		bool SetImageFormat(const VkSurfaceFormatKHR surfaceFormat);
 		bool SetImageSize(const uint32_t width, const uint32_t height);
+		uint32_t GetNextImageIndex(VkSemaphore signalImgReady) const;
+		void PresentFrame(uint32_t index, VkSemaphore waitFor) const;
 
 	private:
 		const CVulkanCore* const m_pCore; // Guaranteed to be non-null
@@ -31,8 +33,6 @@ namespace VulkanApp {
 		void InitializeFramebuffer();
 		void ReleaseFramebuffer();
 	};
-
-
 }
 
 

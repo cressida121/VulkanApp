@@ -188,26 +188,13 @@ void VulkanApp::Application::Run() {
 		}
 		RenderFrame();
 	}
-
 }
 
 void VulkanApp::Application::RenderFrame() {
-	
 	vkWaitForFences(m_core.GetVkLogicalDevice(), 1u, &m_vkFence, VK_TRUE, UINT64_MAX);
 	vkResetFences(m_core.GetVkLogicalDevice(), 1u, &m_vkFence);
 
-	uint32_t imgIndex = 0u;
-	VkResult result = vkAcquireNextImageKHR(
-		m_core.GetVkLogicalDevice(),
-		m_pSwapchain->GetHandle(),
-		UINT64_MAX,
-		m_vkImgRdySem,
-		NULL,
-		&imgIndex);
-
-	if (result != VK_SUCCESS) {
-		throw std::runtime_error(UTIL_EXC_MSG_EX("Cannot acquire a swapchain image", result));
-	}
+	uint32_t imgIndex = m_pSwapchain->GetNextImageIndex(m_vkImgRdySem);
 
 	m_pPass->SubmitWorkload(
 		m_core.m_vkQueue,
@@ -218,37 +205,5 @@ void VulkanApp::Application::RenderFrame() {
 		m_pSwapchain->GetFramebuffer(imgIndex),
 		{ {0,0}, m_vkSurfaceExtent });
 
-	VkPresentInfoKHR presentInfo{};
-	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-
-	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = &m_vkRenderDoneSem[imgIndex];
-
-	VkSwapchainKHR swapChains[] = { m_pSwapchain->GetHandle() };
-	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = swapChains;
-	presentInfo.pImageIndices = &imgIndex;
-
-	presentInfo.pResults = nullptr; // Optional
-
-	result = vkQueuePresentKHR(m_core.m_vkQueue, &presentInfo);
-
-	if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-		vkDeviceWaitIdle(m_core.GetVkLogicalDevice());
-		
-		VkSurfaceCapabilitiesKHR newSurfaceCaps;
-		result = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_core.GetVkPhysicalDevice(), m_vkSurface, &newSurfaceCaps);
-
-		if (result == VK_SUCCESS) {
-			m_vkSurfaceExtent = newSurfaceCaps.currentExtent;
-			m_pSwapchain->SetImageSize(m_vkSurfaceExtent.width, m_vkSurfaceExtent.height);
-			m_pSwapchain->Update();
-		}
-		else {
-			throw std::runtime_error(UTIL_EXC_MSG_EX("Swapchain recreation failure", result));
-		}
-
-	} else if (result != VK_SUCCESS) {
-		throw std::runtime_error(UTIL_EXC_MSG_EX("Frame presentation failed", result));
-	}
+	m_pSwapchain->PresentFrame(imgIndex, m_vkRenderDoneSem[imgIndex]);
 }

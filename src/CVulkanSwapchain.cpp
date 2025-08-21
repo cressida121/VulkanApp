@@ -236,3 +236,36 @@ bool VulkanApp::CVulkanSwapchain::SetImageSize(const uint32_t width, const uint3
 	m_swapchainCI.imageExtent.height = height;
 	return true;
 }
+
+uint32_t VulkanApp::CVulkanSwapchain::GetNextImageIndex(VkSemaphore signalImgReady) const {
+	uint32_t index = 0u;
+	VkResult result = vkAcquireNextImageKHR(
+		m_pCore->GetVkLogicalDevice(),
+		m_vkSwapchain,
+		UINT64_MAX,
+		signalImgReady,
+		NULL,
+		&index);
+
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error(UTIL_EXC_MSG_EX("Cannot acquire a swapchain image", result));
+	}
+
+	return index;
+}
+
+void VulkanApp::CVulkanSwapchain::PresentFrame(uint32_t index, VkSemaphore waitFor) const {
+	VkPresentInfoKHR presentInfo{};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &waitFor;
+	presentInfo.swapchainCount = 1u;
+	presentInfo.pSwapchains = &m_vkSwapchain;
+	presentInfo.pImageIndices = &index;
+	presentInfo.pResults = nullptr; // Optional
+
+	VkResult result = vkQueuePresentKHR(m_pCore->m_vkQueue, &presentInfo);
+	if (result != VK_SUCCESS) {
+		throw std::runtime_error(UTIL_EXC_MSG_EX("Swapchain recreation failure", result));
+	}
+}
