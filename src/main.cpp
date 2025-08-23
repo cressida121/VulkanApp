@@ -1,6 +1,5 @@
 #include <iostream>
 #include <Application.h>
-#include <CWindow.h>
 
 int main() {
 
@@ -8,6 +7,7 @@ int main() {
 	try
 	{
 		VulkanApp::Application vulkanApp(mainWindow.GetHandle());
+		mainWindow.AddEventListener(&vulkanApp);
 		mainWindow.MainLoopProcedure = std::bind(&VulkanApp::Application::RenderFrame, &vulkanApp);
 		mainWindow.Show(true);
 		mainWindow.RunMainLoop();

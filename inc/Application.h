@@ -7,6 +7,7 @@
 #include <vulkan\vulkan.h>
 
 #include <CVulkanCore.h>
+#include <CWindow.h>
 
 /*
 The application design aims to reflect actual Vulkan
@@ -17,13 +18,19 @@ namespace VulkanApp {
 	class CVulkanPass;
 	class CVulkanPipeline;
 	class CVulkanSwapchain;
-	class Application {
+	class Application : public CWindow::IEventListener {
 	public:
 		Application(const HWND windowHandle);
 		~Application();
 		bool RenderFrame();
 
 	private:
+		void OnSizeChanged(const uint32_t width, const uint32_t height) override;
+		void OnClose() override;
+
+		bool windowMinimized = false;
+		bool windowClosed = false;
+
 		CVulkanCore m_core;
 		CVulkanPass *m_pPass = nullptr;
 		CVulkanPipeline *m_pPipeline = nullptr;

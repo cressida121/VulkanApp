@@ -88,6 +88,12 @@ VulkanApp::Application::~Application() {
 }
 
 bool VulkanApp::Application::RenderFrame() {
+	if (windowClosed) {
+		return false;
+	}
+	if (windowMinimized) {
+		return true;
+	}
 	vkWaitForFences(m_core.GetVkLogicalDevice(), 1u, &m_vkFence, VK_TRUE, UINT64_MAX);
 	vkResetFences(m_core.GetVkLogicalDevice(), 1u, &m_vkFence);
 	try
@@ -104,8 +110,26 @@ bool VulkanApp::Application::RenderFrame() {
 		m_pSwapchain->PresentFrame(imgIndex, m_vkRenderDoneSem[imgIndex]);
 		return true;
 	}
-	catch (const std::exception &e)
+	catch (const std::exception &)
 	{
 		return false;
 	}
+}
+
+void VulkanApp::Application::OnSizeChanged(const uint32_t width, const uint32_t height) {
+	if (width == 0) {
+		windowMinimized = true;
+	}
+	else {
+		vkWaitForFences(m_core.GetVkLogicalDevice(), 1u, &m_vkFence, VK_TRUE, UINT64_MAX);
+		m_vkSurfaceExtent.width = width;
+		m_vkSurfaceExtent.height = height;
+		m_pSwapchain->SetImageSize(width, height);
+		m_pSwapchain->Update();
+		windowMinimized = false;
+	}
+}
+
+void VulkanApp::Application::OnClose() {
+	windowClosed = true;
 }
