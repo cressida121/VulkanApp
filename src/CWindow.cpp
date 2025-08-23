@@ -2,7 +2,9 @@
 
 LRESULT CWindow::WindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
 
+	bool wasMsgProcessed = false;
 	for (auto &listener : m_eventListeners) {
+		wasMsgProcessed = true;
 		if (listener.first == hWnd && listener.second != nullptr) {
 			switch (Msg)
 			{
@@ -15,7 +17,6 @@ LRESULT CWindow::WindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
 				break;
 
 			case WM_SIZING:
-				listener.second->OnSizeChanged();
 				break;
 
 			case WM_DESTROY:
@@ -34,10 +35,30 @@ LRESULT CWindow::WindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
 				listener.second->OnClose();
 				break;
 
+			case WM_SIZE:
+				switch (wParam)
+				{
+				case SIZE_MAXIMIZED:
+					listener.second->OnSizeChanged(LOWORD(lParam), HIWORD(lParam));
+					break;
+				case SIZE_MINIMIZED:
+					listener.second->OnSizeChanged(0u, 0u);
+					break;
+				case SIZE_RESTORED:
+					listener.second->OnSizeChanged(LOWORD(lParam), HIWORD(lParam));
+					break;
+				}
+
+				break;
+
 			default:
+				wasMsgProcessed = false;
 				break;
 			}
 		}
+	}
+	if (wasMsgProcessed) {
+		return 0;
 	}
 	return DefWindowProc(hWnd, Msg, wParam, lParam);
 }
@@ -80,8 +101,8 @@ HWND CWindow::CreateSystemWindow(const std::wstring name, const uint32_t windowW
 		windowStyle,
 		CW_USEDEFAULT,
 		CW_USEDEFAULT,
-		clientArea.right - clientArea.left,
-		clientArea.bottom - clientArea.top + 5u,
+		windowWidth,
+		windowHeight,
 		NULL,
 		NULL,
 		hInstance,
@@ -116,4 +137,21 @@ bool CWindow::RemoveEventListener(IEventListener* pListener) {
 		}
 	}
 	return wasRemoved;
+}
+
+void CWindow::Show(bool isVisible) const {
+	ShowWindow(m_windowHandle, isVisible ? SW_SHOW : SW_HIDE);
+}
+
+bool CWindow::RunMainLoop() {
+	if (!MainLoopProcedure)
+		return false;
+	do {
+		MSG msg = { 0 };
+		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+	} while (MainLoopProcedure());
+	return true;
 }

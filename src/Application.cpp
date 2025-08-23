@@ -7,93 +7,7 @@
 
 #include <Windows.h>
 
-#define RENDER_RES_W 640
-#define RENDER_RES_H 480
-
-static LRESULT MyWindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam) {
-
-	switch (Msg)
-	{
-	case WM_CREATE:
-		// Initialize the window. 
-		return 0;
-
-	case WM_PAINT:
-		// Paint the window's client area. 
-		return 0;
-
-	case WM_SIZE:
-		// Set the size and position of the window. 
-		return 0;
-
-	case WM_DESTROY:
-		return 0;
-
-	case WM_CLOSE:
-		PostQuitMessage(0);
-		return 0;
-		// 
-		// Process other messages. 
-		// 
-
-	default:
-		return DefWindowProc(hWnd, Msg, wParam, lParam);
-	}
-	return 0;
-
-}
-
-HWND CreateSystemWindow(const std::wstring &name, const uint32_t windowWidth, const uint32_t windowHeight) {
-	
-	HINSTANCE hInstance = GetModuleHandle(nullptr);
-	WNDCLASSEXW wndClassExW = { 0u };
-	const wchar_t windowClassName[] = L"DefaultWindowClass";
-	
-	wndClassExW.lpszClassName = windowClassName;
-	wndClassExW.lpfnWndProc = MyWindowProc;
-	wndClassExW.hInstance = hInstance;
-	wndClassExW.hCursor = NULL;
-	wndClassExW.hIcon = NULL;
-	wndClassExW.hbrBackground = (HBRUSH)(COLOR_BTNTEXT);
-	wndClassExW.lpszMenuName = NULL;
-	wndClassExW.hIconSm = NULL;
-	wndClassExW.style = NULL;
-	wndClassExW.cbClsExtra = NULL;
-	wndClassExW.cbWndExtra = NULL;
-	wndClassExW.cbSize = sizeof(wndClassExW);
-
-	RegisterClassExW(&wndClassExW);
-
-	RECT clientArea = { 0 };
-	clientArea.top = 0u;
-	clientArea.left = 0u;
-	clientArea.bottom = windowHeight;
-	clientArea.right = windowWidth;
-
-	DWORD windowStyle = WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SIZEBOX;
-
-	AdjustWindowRectEx(&clientArea, windowStyle, TRUE, WS_EX_OVERLAPPEDWINDOW);
-
-	HWND systemWindowHandle = CreateWindowExW(
-		WS_EX_OVERLAPPEDWINDOW,
-		windowClassName,
-		name.c_str(),
-		windowStyle,
-		CW_USEDEFAULT,
-		CW_USEDEFAULT,
-		clientArea.right - clientArea.left,
-		clientArea.bottom - clientArea.top + 5u,
-		NULL,
-		NULL,
-		hInstance,
-		NULL);
-
-	return systemWindowHandle;
-}
-
-
-VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t windowHeight) 
-	:	m_mainWindowHandle(CreateSystemWindow(L"VulkanApp", windowWidth, windowHeight)),
+VulkanApp::Application::Application(const HWND windowHandle) :
 		m_core("VulkanApp") {
 
 	VkWin32SurfaceCreateInfoKHR surfaceInfo = {};
@@ -101,7 +15,7 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 		surfaceInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
 		surfaceInfo.pNext = nullptr;
 		surfaceInfo.hinstance = GetModuleHandle(NULL);
-		surfaceInfo.hwnd = static_cast<HWND>(m_mainWindowHandle);
+		surfaceInfo.hwnd = windowHandle;
 	}
 
 	if (vkCreateWin32SurfaceKHR(m_core.GetVkInstance(), &surfaceInfo, nullptr, &m_vkSurface) != VK_SUCCESS) {
@@ -128,7 +42,7 @@ VulkanApp::Application::Application(const uint32_t windowWidth, const uint32_t w
 	m_shaderStageCI[1].module = CVulkanPipeline::LoadCompiledShader(m_core.GetVkLogicalDevice(), FRAGMENT_SHADER_PATH);
 	m_shaderStageCI[1].pName = "main";
 	
-	m_pPipeline = new CVulkanPipeline(&m_core, m_pPass, RENDER_RES_W, RENDER_RES_H, m_shaderStageCI);
+	m_pPipeline = new CVulkanPipeline(&m_core, m_pPass, capabilities.currentExtent.width, capabilities.currentExtent.height, m_shaderStageCI);
 	m_pSwapchain = new CVulkanSwapchain(&m_core, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat, m_pPass->GetHandle());
 
 	// Create synchronization objects
@@ -173,37 +87,25 @@ VulkanApp::Application::~Application() {
 	vkDestroySurfaceKHR(m_core.GetVkInstance(), m_vkSurface, nullptr);
 }
 
-void VulkanApp::Application::Run() {
-
-	ShowWindow(static_cast<HWND>(m_mainWindowHandle), SW_SHOW);
-
-	MSG msg = { 0 };
-	while (true) {
-		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-			TranslateMessage(&msg);
-			DispatchMessage(&msg);
-			if (msg.message == WM_QUIT) {
-				return;
-			}
-		}
-		RenderFrame();
-	}
-}
-
-void VulkanApp::Application::RenderFrame() {
+bool VulkanApp::Application::RenderFrame() {
 	vkWaitForFences(m_core.GetVkLogicalDevice(), 1u, &m_vkFence, VK_TRUE, UINT64_MAX);
 	vkResetFences(m_core.GetVkLogicalDevice(), 1u, &m_vkFence);
-
-	uint32_t imgIndex = m_pSwapchain->GetNextImageIndex(m_vkImgRdySem);
-
-	m_pPass->SubmitWorkload(
-		m_core.m_vkQueue,
-		m_pPipeline->GetHandle(),
-		m_vkImgRdySem,
-		m_vkRenderDoneSem[imgIndex],
-		m_vkFence,
-		m_pSwapchain->GetFramebuffer(imgIndex),
-		{ {0,0}, m_vkSurfaceExtent });
-
-	m_pSwapchain->PresentFrame(imgIndex, m_vkRenderDoneSem[imgIndex]);
+	try
+	{
+		uint32_t imgIndex = m_pSwapchain->GetNextImageIndex(m_vkImgRdySem);
+		m_pPass->SubmitWorkload(
+			m_core.m_vkQueue,
+			m_pPipeline->GetHandle(),
+			m_vkImgRdySem,
+			m_vkRenderDoneSem[imgIndex],
+			m_vkFence,
+			m_pSwapchain->GetFramebuffer(imgIndex),
+			{ {0,0}, m_vkSurfaceExtent });
+		m_pSwapchain->PresentFrame(imgIndex, m_vkRenderDoneSem[imgIndex]);
+		return true;
+	}
+	catch (const std::exception &e)
+	{
+		return false;
+	}
 }

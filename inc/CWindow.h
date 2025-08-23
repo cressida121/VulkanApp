@@ -5,15 +5,18 @@
 
 #include <vector>
 #include <string>
+#include <functional>
 
 class CWindow {
 public:
+	std::function<bool()> MainLoopProcedure;
+
 	class IEventListener {
 		friend class CWindow;
 	private:
 		virtual void OnClose() {};
 		virtual void OnCreate() {};
-		virtual void OnSizeChanged() {};
+		virtual void OnSizeChanged(const uint32_t width, const uint32_t height) {};
 		virtual void OnDestroy() {};
 		virtual void OnMoveEnter() {};
 		virtual void OnMoveExit() {};
@@ -24,6 +27,8 @@ public:
 	bool AddEventListener(IEventListener* pListener);
 	bool RemoveEventListener(IEventListener* pListener);
 	HWND GetHandle() const { return m_windowHandle; };
+	void Show(bool isVisible) const;
+	bool RunMainLoop();
 
 private:
 	static LRESULT WindowProc(HWND hWnd, UINT Msg, WPARAM wParam, LPARAM lParam);

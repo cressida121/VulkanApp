@@ -19,10 +19,9 @@ namespace VulkanApp {
 	class CVulkanSwapchain;
 	class Application {
 	public:
-		Application(const uint32_t windowWidth, const uint32_t windowHeight);
+		Application(const HWND windowHandle);
 		~Application();
-		void Run();
-		void RenderFrame();
+		bool RenderFrame();
 
 	private:
 		CVulkanCore m_core;
@@ -31,7 +30,6 @@ namespace VulkanApp {
 		CVulkanSwapchain *m_pSwapchain = nullptr;
 
 		// Window Manager - Win32 window system adapter class
-		void *m_mainWindowHandle = nullptr;
 		VkSurfaceKHR m_vkSurface = VK_NULL_HANDLE;
 		VkSurfaceFormatKHR m_vkSurfaceFormat;
 		VkExtent2D m_vkSurfaceExtent;
