@@ -127,6 +127,11 @@ void VulkanApp::Application::OnSizeChanged(const uint32_t width, const uint32_t 
 		m_windowHeight = height;
 		m_pSwapchain->SetImageSize(width, height);
 		m_pSwapchain->Update();
+		m_pPipeline->m_viewport.width = static_cast<float>(width);
+		m_pPipeline->m_viewport.height = static_cast<float>(height);
+		m_pPipeline->m_scissorRect.extent.width = width;
+		m_pPipeline->m_scissorRect.extent.height = height;
+		m_pPipeline->Update();
 		m_windowMinimized = false;
 	}
 }

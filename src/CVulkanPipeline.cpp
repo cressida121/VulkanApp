@@ -96,11 +96,11 @@ VulkanApp::CVulkanPipeline::CVulkanPipeline(
 	m_pipelineCI.basePipelineHandle = VK_NULL_HANDLE;
 	m_pipelineCI.basePipelineIndex = -1;
 
-	Initialize();
+	Update();
 
 }
 
-void VulkanApp::CVulkanPipeline::Initialize() {
+void VulkanApp::CVulkanPipeline::Update() {
 	
 	Release();
 

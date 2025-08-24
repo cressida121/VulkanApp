@@ -16,7 +16,7 @@ namespace VulkanApp {
 		CVulkanPipeline(const CVulkanCore * const pCore, const CVulkanPass *const pPass, const uint32_t vpWidth, const uint32_t vpHeight, const VkPipelineShaderStageCreateInfo *const shaderStages);
 		~CVulkanPipeline() { Release(); }
 		VkPipeline GetHandle() const { return m_vkPipeline; };
-		void Initialize();
+		void Update();
 		static VkShaderModule LoadCompiledShader(const VkDevice device, const std::string& filePath);
 		
 		VkPipelineVertexInputStateCreateInfo m_vertexInputStateCI = {};
