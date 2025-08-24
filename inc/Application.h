@@ -28,18 +28,20 @@ namespace VulkanApp {
 		void OnSizeChanged(const uint32_t width, const uint32_t height) override;
 		void OnClose() override;
 
-		bool windowMinimized = false;
-		bool windowClosed = false;
+		// Window properties
+		bool m_windowMinimized = false;
+		bool m_windowClosed = false;
+		uint32_t m_windowWidth = 0u;
+		uint32_t m_windowHeight = 0u;
 
 		CVulkanCore m_core;
 		CVulkanPass *m_pPass = nullptr;
 		CVulkanPipeline *m_pPipeline = nullptr;
 		CVulkanSwapchain *m_pSwapchain = nullptr;
 
-		// Window Manager - Win32 window system adapter class
+		// Window surface
 		VkSurfaceKHR m_vkSurface = VK_NULL_HANDLE;
 		VkSurfaceFormatKHR m_vkSurfaceFormat;
-		VkExtent2D m_vkSurfaceExtent;
 
 		// Pipeline
 		VkPipelineShaderStageCreateInfo m_shaderStageCI[2];

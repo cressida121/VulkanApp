@@ -25,7 +25,8 @@ VulkanApp::Application::Application(const HWND windowHandle) :
 	VkSurfaceCapabilitiesKHR capabilities;
 	vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_core.GetVkPhysicalDevice(), m_vkSurface, &capabilities);
 
-	m_vkSurfaceExtent = capabilities.currentExtent;
+	m_windowWidth = capabilities.currentExtent.width;
+	m_windowHeight = capabilities.currentExtent.height;
 	m_vkSurfaceFormat.format = VkFormat::VK_FORMAT_B8G8R8A8_SRGB;
 	m_vkSurfaceFormat.colorSpace = VkColorSpaceKHR::VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
 	
@@ -42,8 +43,8 @@ VulkanApp::Application::Application(const HWND windowHandle) :
 	m_shaderStageCI[1].module = CVulkanPipeline::LoadCompiledShader(m_core.GetVkLogicalDevice(), FRAGMENT_SHADER_PATH);
 	m_shaderStageCI[1].pName = "main";
 	
-	m_pPipeline = new CVulkanPipeline(&m_core, m_pPass, capabilities.currentExtent.width, capabilities.currentExtent.height, m_shaderStageCI);
-	m_pSwapchain = new CVulkanSwapchain(&m_core, capabilities.currentExtent.width, capabilities.currentExtent.height, m_vkSurface, m_vkSurfaceFormat, m_pPass->GetHandle());
+	m_pPipeline = new CVulkanPipeline(&m_core, m_pPass, m_windowWidth, m_windowHeight, m_shaderStageCI);
+	m_pSwapchain = new CVulkanSwapchain(&m_core, m_windowWidth, m_windowHeight, m_vkSurface, m_vkSurfaceFormat, m_pPass->GetHandle());
 
 	// Create synchronization objects
 
@@ -88,10 +89,10 @@ VulkanApp::Application::~Application() {
 }
 
 bool VulkanApp::Application::RenderFrame() {
-	if (windowClosed) {
+	if (m_windowClosed) {
 		return false;
 	}
-	if (windowMinimized) {
+	if (m_windowMinimized) {
 		return true;
 	}
 	vkWaitForFences(m_core.GetVkLogicalDevice(), 1u, &m_vkFence, VK_TRUE, UINT64_MAX);
@@ -106,7 +107,7 @@ bool VulkanApp::Application::RenderFrame() {
 			m_vkRenderDoneSem[imgIndex],
 			m_vkFence,
 			m_pSwapchain->GetFramebuffer(imgIndex),
-			{ {0,0}, m_vkSurfaceExtent });
+			{ {0,0}, {m_windowWidth, m_windowHeight} });
 		m_pSwapchain->PresentFrame(imgIndex, m_vkRenderDoneSem[imgIndex]);
 		return true;
 	}
@@ -118,18 +119,18 @@ bool VulkanApp::Application::RenderFrame() {
 
 void VulkanApp::Application::OnSizeChanged(const uint32_t width, const uint32_t height) {
 	if (width == 0) {
-		windowMinimized = true;
+		m_windowMinimized = true;
 	}
 	else {
 		vkWaitForFences(m_core.GetVkLogicalDevice(), 1u, &m_vkFence, VK_TRUE, UINT64_MAX);
-		m_vkSurfaceExtent.width = width;
-		m_vkSurfaceExtent.height = height;
+		m_windowWidth = width;
+		m_windowHeight = height;
 		m_pSwapchain->SetImageSize(width, height);
 		m_pSwapchain->Update();
-		windowMinimized = false;
+		m_windowMinimized = false;
 	}
 }
 
 void VulkanApp::Application::OnClose() {
-	windowClosed = true;
+	m_windowClosed = true;
 }
