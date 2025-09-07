@@ -145,6 +145,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\inc\Application.h" />
+    <ClInclude Include="..\inc\CBuffer.h" />
     <ClInclude Include="..\inc\CVulkanCore.h" />
     <ClInclude Include="..\inc\CVulkanPass.h" />
     <ClInclude Include="..\inc\CVulkanPipeline.h" />
