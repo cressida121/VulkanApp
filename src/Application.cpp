@@ -43,7 +43,12 @@ VulkanApp::Application::Application(const HWND windowHandle) :
 	m_shaderStageCI[1].module = CVulkanPipeline::LoadCompiledShader(m_core.GetVkLogicalDevice(), FRAGMENT_SHADER_PATH);
 	m_shaderStageCI[1].pName = "main";
 	
-	m_pPipeline = new CVulkanPipeline(&m_core, m_pPass, m_windowWidth, m_windowHeight, m_shaderStageCI);
+	CBufferLayout vbLayout = {
+		{BufferAttribute::ShaderDataType::float3, "position"},
+		{BufferAttribute::ShaderDataType::float3, "color"} 
+	};
+
+	m_pPipeline = new CVulkanPipeline(&m_core, m_pPass, m_windowWidth, m_windowHeight, m_shaderStageCI, vbLayout);
 	m_pSwapchain = new CVulkanSwapchain(&m_core, m_windowWidth, m_windowHeight, m_vkSurface, m_vkSurfaceFormat, m_pPass->GetHandle());
 
 	// Create synchronization objects

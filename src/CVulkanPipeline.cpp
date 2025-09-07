@@ -6,20 +6,41 @@
 #include <stdexcept>
 #include <fstream>
 
+namespace VulkanApp {
+	static VkFormat GetVkFormat(BufferAttribute::ShaderDataType shaderDataType) {
+		switch (shaderDataType)
+		{
+		case BufferAttribute::ShaderDataType::int3:		return VK_FORMAT_R32G32B32_SINT;
+		case BufferAttribute::ShaderDataType::int4:		return VK_FORMAT_R32G32B32A32_SINT;
+		case BufferAttribute::ShaderDataType::uint3:	return VK_FORMAT_R32G32B32_UINT;
+		case BufferAttribute::ShaderDataType::uint4:	return VK_FORMAT_R32G32B32A32_UINT;
+		case BufferAttribute::ShaderDataType::float3:	return VK_FORMAT_R32G32B32_SFLOAT;
+		case BufferAttribute::ShaderDataType::float4:	return VK_FORMAT_R32G32B32A32_SFLOAT;
+		default: break;
+		}
+		return VK_FORMAT_UNDEFINED;
+	}
+}
+
 VulkanApp::CVulkanPipeline::CVulkanPipeline(
 	const CVulkanCore *const pCore,
 	const CVulkanPass *const pPass,
 	const uint32_t vpWidth,
 	const uint32_t vpHeight,
-	const VkPipelineShaderStageCreateInfo *const shaderStages)
+	const VkPipelineShaderStageCreateInfo *const shaderStages,
+	const CBufferLayout vertexLayout)
 	: m_pCore(pCore)
 {
-	// Initialize descriptors with deafult values
-	m_vertexInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	m_vertexInputStateCI.vertexBindingDescriptionCount = 0;
-	m_vertexInputStateCI.pVertexBindingDescriptions = nullptr;
-	m_vertexInputStateCI.vertexAttributeDescriptionCount = 0;
-	m_vertexInputStateCI.pVertexAttributeDescriptions = nullptr;
+	if (vertexLayout.GetAttributesCount() == 0) {
+		m_vertexInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+		m_vertexInputStateCI.vertexBindingDescriptionCount = 0;
+		m_vertexInputStateCI.pVertexBindingDescriptions = nullptr;
+		m_vertexInputStateCI.vertexAttributeDescriptionCount = 0;
+		m_vertexInputStateCI.pVertexAttributeDescriptions = nullptr;
+	}
+	else {
+		SetVertexBufferLayout(vertexLayout);
+	}
 
 	m_inputAssemblyCI.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
 	m_inputAssemblyCI.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -100,6 +121,19 @@ VulkanApp::CVulkanPipeline::CVulkanPipeline(
 
 }
 
+VulkanApp::CVulkanPipeline::~CVulkanPipeline() 
+{
+	Release();
+
+	if (m_vertexInputStateCI.pVertexBindingDescriptions) {
+		delete m_vertexInputStateCI.pVertexBindingDescriptions;
+	}
+
+	if (m_vertexInputStateCI.pVertexAttributeDescriptions) {
+		delete m_vertexInputStateCI.pVertexAttributeDescriptions;
+	}
+}
+
 void VulkanApp::CVulkanPipeline::Update() {
 	
 	Release();
@@ -116,6 +150,35 @@ void VulkanApp::CVulkanPipeline::Update() {
 		throw std::runtime_error(UTIL_EXC_MSG_EX("Cannot create pipeline", result));
 	}
 
+}
+
+void VulkanApp::CVulkanPipeline::SetVertexBufferLayout(const CBufferLayout layout)
+{
+	if (m_vertexInputStateCI.pVertexBindingDescriptions) {
+		delete m_vertexInputStateCI.pVertexBindingDescriptions;
+	}
+
+	if (m_vertexInputStateCI.pVertexAttributeDescriptions) {
+		delete m_vertexInputStateCI.pVertexAttributeDescriptions;
+	}
+
+	m_vertexInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	m_vertexInputStateCI.vertexBindingDescriptionCount = 1;
+	m_vertexInputStateCI.pVertexBindingDescriptions = new VkVertexInputBindingDescription(0, layout.GetByteSize(), VK_VERTEX_INPUT_RATE_VERTEX);
+
+	m_vertexInputStateCI.vertexAttributeDescriptionCount = layout.GetAttributesCount();
+
+	VkVertexInputAttributeDescription* viaDesc = new VkVertexInputAttributeDescription[layout.GetAttributesCount()];
+
+	for (uint32_t i = 0; i < layout.GetAttributesCount(); i++) {
+		BufferAttribute attribute = layout.GetAttribute(i);
+		viaDesc[i].binding = 0;
+		viaDesc[i].location = i;
+		viaDesc[i].offset = attribute.m_offset;
+		viaDesc[i].format = GetVkFormat(attribute.m_shaderDataType);
+	}
+
+	m_vertexInputStateCI.pVertexAttributeDescriptions = viaDesc;
 }
 
 VkShaderModule VulkanApp::CVulkanPipeline::LoadCompiledShader(const VkDevice device, const std::string& filePath) {
@@ -157,5 +220,4 @@ void VulkanApp::CVulkanPipeline::Release() {
 		vkDestroyPipelineLayout(m_pCore->GetVkLogicalDevice(), m_pipelineCI.layout, nullptr);
 		m_pipelineCI.layout = VK_NULL_HANDLE;
 	}
-
 }
