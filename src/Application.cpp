@@ -66,6 +66,14 @@ VulkanApp::Application::Application(const HWND windowHandle) :
 		vkCreateFence(m_core.GetVkLogicalDevice(), &fenceCI, nullptr, &m_vkFence) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] failed to create semaphores");
 	}
+
+	// Create vertex buffer
+	const float vertDataRaw[] = { 
+		 0.0,-1.0, 0.0,      1.0, 0.5, 0.5,
+		 1.0, 1.0, 0.0,      0.1, 1.0, 0.4,
+		-1.0, 1.0, 0.0,      0.0, 0.0, 1.0 };
+
+	m_pVertexBuffer = new CVulkanBuffer(&m_core, vertDataRaw, 3 * vbLayout.GetByteSize(), VkBufferUsageFlagBits::VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
 }
 
 VulkanApp::Application::~Application() {
@@ -75,6 +83,10 @@ VulkanApp::Application::~Application() {
 	vkDestroySemaphore(m_core.GetVkLogicalDevice(), m_vkRenderDoneSem[0], nullptr);
 	vkDestroySemaphore(m_core.GetVkLogicalDevice(), m_vkRenderDoneSem[1], nullptr);
 	vkDestroyFence(m_core.GetVkLogicalDevice(), m_vkFence, nullptr);
+	
+	if (m_pVertexBuffer) {
+		delete m_pVertexBuffer;
+	}
 
 	if (m_pSwapchain) {
 		delete m_pSwapchain;
@@ -107,6 +119,7 @@ bool VulkanApp::Application::RenderFrame() {
 		uint32_t imgIndex = m_pSwapchain->GetNextImageIndex(m_vkImgRdySem);
 		m_pPass->SubmitWorkload(
 			m_core.m_vkQueue,
+			m_pVertexBuffer->GetHandle(),
 			m_pPipeline->GetHandle(),
 			m_vkImgRdySem,
 			m_vkRenderDoneSem[imgIndex],

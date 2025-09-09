@@ -18,6 +18,7 @@ namespace VulkanApp {
 	class CVulkanPass;
 	class CVulkanPipeline;
 	class CVulkanSwapchain;
+	class CVulkanBuffer;
 	class Application : public CWindow::IEventListener {
 	public:
 		Application(const HWND windowHandle);
@@ -38,6 +39,7 @@ namespace VulkanApp {
 		CVulkanPass *m_pPass = nullptr;
 		CVulkanPipeline *m_pPipeline = nullptr;
 		CVulkanSwapchain *m_pSwapchain = nullptr;
+		CVulkanBuffer* m_pVertexBuffer = nullptr;
 
 		// Window surface
 		VkSurfaceKHR m_vkSurface = VK_NULL_HANDLE;
