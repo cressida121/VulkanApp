@@ -89,6 +89,7 @@ void VulkanApp::CVulkanPass::Release() {
 
 void VulkanApp::CVulkanPass::SubmitWorkload(
 	VkQueue queue,
+	VkBuffer vertexBuffer,
 	VkPipeline pipeline,
 	VkSemaphore waitSemaphore,
 	VkSemaphore signalSemaphore,
@@ -120,6 +121,8 @@ void VulkanApp::CVulkanPass::SubmitWorkload(
 
 	vkCmdBeginRenderPass(m_vkCommandBuffer, &renderPassCI, VK_SUBPASS_CONTENTS_INLINE);
 	vkCmdBindPipeline(m_vkCommandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+	VkDeviceSize offsets[] = { 0 };
+	vkCmdBindVertexBuffers(m_vkCommandBuffer, 0, 1, &vertexBuffer, offsets);
 	vkCmdDraw(m_vkCommandBuffer, 3, 1, 0, 0);
 	vkCmdEndRenderPass(m_vkCommandBuffer);
 

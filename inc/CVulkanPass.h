@@ -18,6 +18,7 @@ namespace VulkanApp {
 		void Release();
 		const VkRenderPass GetHandle() const { return m_vkRenderPass; };
 		void SubmitWorkload(VkQueue queue,
+			VkBuffer vertexBuffer,
 			VkPipeline pipeline,
 			VkSemaphore waitSemaphore,
 			VkSemaphore signalSemaphore,
