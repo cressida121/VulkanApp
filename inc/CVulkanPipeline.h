@@ -1,7 +1,7 @@
 #ifndef  C_VULKAN_PIPELINE_H_
 #define  C_VULKAN_PIPELINE_H_
 
-#include <CBuffer.h>
+#include <CVulkanBuffer.h>
 
 #ifndef VULKAN_H_
 #include <vulkan/vulkan.h>
