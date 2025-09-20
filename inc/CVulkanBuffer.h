@@ -51,11 +51,15 @@ namespace VulkanApp {
 		VkBuffer GetHandle() const { return m_vkBuffer; }
 	private:
 		const CVulkanCore* const m_pCore = nullptr;
-		VkBufferCreateInfo m_vkBufferCI = {};
+		void* m_pMappedData = nullptr;
+		const uint32_t m_byteSize = 0;
 		VkBuffer m_vkBuffer = VK_NULL_HANDLE;
-		VkMemoryAllocateInfo m_vkMemoryAllocateInfo = {};
-		VkDeviceMemory m_vkDeviceMemory = VK_NULL_HANDLE;
-		int GetMemoryType(VkBuffer buffer, int propertyFlagBits, unsigned long long* requiredSpace);
+		VkDeviceMemory m_vkBufferMemory = VK_NULL_HANDLE;
+		static VkBuffer CreateBuffer(
+			const CVulkanCore *const pCore, const uint32_t byteSize, const uint32_t bufferUsageFlagBits,
+			const uint32_t memoryPropertyFlagBits,const VkSharingMode sharingMode, VkDeviceMemory *pBufferMemory);
 	};
+
+
 }
 #endif C_BUFFER_H_
