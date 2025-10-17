@@ -60,9 +60,17 @@ VulkanApp::Application::Application(const HWND windowHandle) :
 	fenceCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	fenceCI.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
+	m_vkRenderDoneSemVec.resize(m_pSwapchain->GetFramebufferCount());
+
+	for (auto &fb : m_vkRenderDoneSemVec) {
+		VkSemaphore semaphore = VK_NULL_HANDLE;
+		if (vkCreateSemaphore(m_core.GetVkLogicalDevice(), &semaphoreCI, nullptr, &semaphore) != VK_SUCCESS) {
+			throw std::runtime_error("[Runtime error] failed to create semaphores");
+		}
+		fb = semaphore;
+	}
+
 	if (vkCreateSemaphore(m_core.GetVkLogicalDevice(), &semaphoreCI, nullptr, &m_vkImgRdySem) != VK_SUCCESS ||
-		vkCreateSemaphore(m_core.GetVkLogicalDevice(), &semaphoreCI, nullptr, &m_vkRenderDoneSem[0]) != VK_SUCCESS ||
-		vkCreateSemaphore(m_core.GetVkLogicalDevice(), &semaphoreCI, nullptr, &m_vkRenderDoneSem[1]) != VK_SUCCESS ||
 		vkCreateFence(m_core.GetVkLogicalDevice(), &fenceCI, nullptr, &m_vkFence) != VK_SUCCESS) {
 		throw std::runtime_error("[Runtime error] failed to create semaphores");
 	}
@@ -80,8 +88,9 @@ VulkanApp::Application::~Application() {
 	// Cleanup created Vulkan resources
 	vkDeviceWaitIdle(m_core.GetVkLogicalDevice());
 	vkDestroySemaphore(m_core.GetVkLogicalDevice(), m_vkImgRdySem, nullptr);
-	vkDestroySemaphore(m_core.GetVkLogicalDevice(), m_vkRenderDoneSem[0], nullptr);
-	vkDestroySemaphore(m_core.GetVkLogicalDevice(), m_vkRenderDoneSem[1], nullptr);
+	for (auto &fb : m_vkRenderDoneSemVec) {
+		vkDestroySemaphore(m_core.GetVkLogicalDevice(), fb, nullptr);
+	}
 	vkDestroyFence(m_core.GetVkLogicalDevice(), m_vkFence, nullptr);
 	
 	if (m_pVertexBuffer) {
@@ -122,11 +131,11 @@ bool VulkanApp::Application::RenderFrame() {
 			m_pVertexBuffer->GetHandle(),
 			m_pPipeline->GetHandle(),
 			m_vkImgRdySem,
-			m_vkRenderDoneSem[imgIndex],
+			m_vkRenderDoneSemVec[imgIndex],
 			m_vkFence,
 			m_pSwapchain->GetFramebuffer(imgIndex),
 			{ {0,0}, {m_windowWidth, m_windowHeight} });
-		m_pSwapchain->PresentFrame(imgIndex, m_vkRenderDoneSem[imgIndex]);
+		m_pSwapchain->PresentFrame(imgIndex, m_vkRenderDoneSemVec[imgIndex]);
 		return true;
 	}
 	catch (const std::exception &)

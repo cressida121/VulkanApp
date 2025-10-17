@@ -22,6 +22,7 @@ namespace VulkanApp {
 		bool SetImageSize(const uint32_t width, const uint32_t height);
 		uint32_t GetNextImageIndex(VkSemaphore signalImgReady) const;
 		void PresentFrame(uint32_t index, VkSemaphore waitFor) const;
+		uint32_t GetFramebufferCount() const { return m_framebuffers.size(); };
 
 	private:
 		const CVulkanCore* const m_pCore; // Guaranteed to be non-null
